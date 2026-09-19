@@ -1,0 +1,1899 @@
+--[[
+    BLACKZ VIP FLY v8.5 — FULL ULTIMATE EDITION
+    ✅ 5 Fly Modes | ✅ Fix Lag (11 tính năng) | ✅ Full Combat
+    ✅ Không hook __namecall → Không crash game
+    ✅ Loop tối ưu — Không lag
+    🔑 Keys: blackzfree | blackzmid | blackzpro
+]]
+
+print("═══════════════════════════════════════════════")
+print("⚡ BLACKZ VIP FLY v8.5 — FULL ULTIMATE")
+print("═══════════════════════════════════════════════")
+
+-- ═══════════ SERVICES ═══════════
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+local Stats = game:GetService("Stats")
+local SoundService = game:GetService("SoundService")
+local VirtualUser = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
+local LP = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ═══════════ CACHE ═══════════
+local pcall = pcall
+local ipairs, pairs = ipairs, pairs
+local type, typeof = type, typeof
+local tostring, tonumber = tostring, tonumber
+local m_floor, m_abs, m_min, m_max, m_clamp, m_rad, m_random = math.floor, math.abs, math.min, math.max, math.clamp, math.rad, math.random
+local m_huge, m_sin = math.huge, math.sin
+local s_format, s_find, s_lower, s_gsub = string.format, string.find, string.lower, string.gsub
+local t_insert, t_remove = table.insert, table.remove
+local V2, V2z = Vector2.new, Vector2.zero
+local V3, V3z = Vector3.new, Vector3.zero
+local CF, CFAng = CFrame.new, CFrame.Angles
+local C3, C3RGB = Color3.new, Color3.fromRGB
+local New = Instance.new
+local UD2, UD = UDim2.new, UDim.new
+local wait_t, spawn_t, delay_t = task.wait, task.spawn, task.delay
+local UIT = Enum.UserInputType
+local KS = Enum.KeyCode
+local HS = Enum.HumanoidStateType
+local gethui = gethui
+
+-- ═══════════ CLEANUP GUI CŨ ═══════════
+pcall(function()
+    local parents = { CoreGui }
+    if LP:FindFirstChild("PlayerGui") then t_insert(parents, LP.PlayerGui) end
+    if gethui then local h = gethui(); if h then t_insert(parents, h) end end
+    for _, parent in ipairs(parents) do
+        if parent then
+            for _, obj in ipairs(parent:GetChildren()) do
+                if obj:IsA("ScreenGui") and (s_find(obj.Name, "BlackZ") or s_find(obj.Name, "System")) then
+                    obj:Destroy()
+                end
+            end
+        end
+    end
+end)
+_G.BlackZ_Built = false
+_G.BlackZ_Alive = true
+print("[CLEANUP] OK")
+
+-- ═══════════ PARENT ═══════════
+local PARENT = CoreGui
+pcall(function()
+    if gethui then local h = gethui(); if h then PARENT = h end end
+end)
+
+local function SafeParent(g)
+    if not g then return end
+    pcall(function() g.Parent = PARENT end)
+    if not g.Parent then pcall(function() g.Parent = CoreGui end) end
+end
+
+-- ═══════════ UI HELPERS ═══════════
+local function mk(cls, parent, props)
+    local i = New(cls)
+    if props then for k, v in pairs(props) do pcall(function() i[k] = v end) end end
+    if parent then pcall(function() i.Parent = parent end) end
+    return i
+end
+
+local function corner(p, r)
+    local c = New("UICorner")
+    c.CornerRadius = UD(0, r or 6)
+    c.Parent = p
+end
+
+local function stroke(p, col, thick, trans)
+    local s = New("UIStroke")
+    s.Color = col or C3(0, 220, 255)
+    s.Thickness = thick or 1
+    s.Transparency = trans or 0.4
+    s.Parent = p
+    return s
+end
+
+local function gradient(p, c1, c2, rot)
+    local g = New("UIGradient")
+    g.Color = ColorSequence.new(c1, c2)
+    g.Rotation = rot or 0
+    g.Parent = p
+end
+
+local function listLay(p, pad)
+    local l = New("UIListLayout")
+    l.Padding = UD(0, pad or 4)
+    l.SortOrder = Enum.SortOrder.LayoutOrder
+    l.Parent = p
+end
+
+local function gridLay(p, cols, w, h, px, py)
+    local g = New("UIGridLayout")
+    g.CellSize = UD2(0, w or 100, 0, h or 26)
+    g.CellPadding = UD2(0, px or 4, 0, py or 4)
+    g.SortOrder = Enum.SortOrder.LayoutOrder
+    g.FillDirection = Enum.FillDirection.Horizontal
+    g.FillDirectionMaxCells = cols or 2
+    g.Parent = p
+end
+
+local function uiPad(p, t, l, r, b)
+    local x = New("UIPadding")
+    x.PaddingTop = UD(0, t or 0)
+    x.PaddingLeft = UD(0, l or 0)
+    x.PaddingRight = UD(0, r or 0)
+    x.PaddingBottom = UD(0, b or 0)
+    x.Parent = p
+end
+
+-- ═══════════ THEME ═══════════
+local Theme = {
+    accent = C3RGB(0, 220, 255),
+    accent2 = C3RGB(255, 0, 200),
+    bg = C3RGB(12, 12, 18),
+    bgMid = C3RGB(20, 20, 28),
+    bgCard = C3RGB(26, 26, 36),
+    bgTrk = C3RGB(40, 40, 52),
+    txt = C3RGB(240, 240, 250),
+    sub = C3RGB(140, 140, 170),
+}
+
+local ThemePresets = {
+    { name = "Cyber Cyan", c1 = C3RGB(0, 220, 255), c2 = C3RGB(255, 0, 200) },
+    { name = "Neon Green", c1 = C3RGB(80, 255, 120), c2 = C3RGB(0, 200, 100) },
+    { name = "Blood Red",  c1 = C3RGB(255, 40, 60),  c2 = C3RGB(180, 0, 40) },
+    { name = "Royal Purp", c1 = C3RGB(180, 100, 255), c2 = C3RGB(100, 0, 200) },
+    { name = "Sunset",     c1 = C3RGB(255, 140, 40), c2 = C3RGB(255, 60, 90) },
+    { name = "Gold Elite", c1 = C3RGB(255, 200, 40), c2 = C3RGB(255, 140, 0) },
+    { name = "Ice Blue",   c1 = C3RGB(100, 200, 255), c2 = C3RGB(0, 100, 200) },
+    { name = "Pink",       c1 = C3RGB(255, 150, 200), c2 = C3RGB(255, 100, 150) },
+    { name = "Mint",       c1 = C3RGB(150, 255, 200), c2 = C3RGB(80, 200, 150) },
+    { name = "Crimson",    c1 = C3RGB(220, 20, 60),  c2 = C3RGB(139, 0, 0) },
+    { name = "Toxic",      c1 = C3RGB(180, 255, 0),  c2 = C3RGB(0, 200, 0) },
+    { name = "Midnight",   c1 = C3RGB(50, 50, 150),  c2 = C3RGB(20, 20, 80) },
+}
+
+-- ═══════════ KEY SYSTEM ═══════════
+local TIER = {
+    FREE = { name = "FREE", color = C3RGB(150, 150, 150), maxSpd = 80,
+        invis = false, spin = false, esp = false, aim = false, tp = false, theme = false },
+    VIP = { name = "VIP", color = C3RGB(0, 220, 255), maxSpd = 300,
+        invis = true, spin = true, esp = true, aim = false, tp = true, theme = true },
+    ULTRA = { name = "ULTRA", color = C3RGB(255, 100, 200), maxSpd = 9999,
+        invis = true, spin = true, esp = true, aim = true, tp = true, theme = true },
+}
+local KEYS = { blackzfree = "FREE", blackzmid = "VIP", blackzpro = "ULTRA" }
+local KeyState = { verified = false, tier = "FREE", key = nil }
+
+local function VerifyKey(s)
+    if not s or s == "" then return false, "Nhập key" end
+    s = s_lower(s):gsub("%s+", "")
+    if not KEYS[s] then return false, "Key sai" end
+    KeyState.verified = true
+    KeyState.tier = KEYS[s]
+    KeyState.key = s
+    return true, "OK"
+end
+local function GetTier() return TIER[KeyState.tier] or TIER.FREE end
+
+-- ═══════════ STATE ═══════════
+local S = {
+    char = nil, hrp = nil, hum = nil,
+    -- Fly
+    fly = false, flyMode = "CFrame", flySpd = 150, flyAccel = 15, flyBrake = 25,
+    flyVel = V3z, flyBV = nil, flyBG = nil,
+    flyLV = nil, flyAO = nil, flyAtc = nil, flyTarget = nil,
+    flyAltLock = false, flyAltHeight = 100,
+    vjoy = 0, vjoyAct = false,
+    -- Speed
+    walkSpd = 50, jumpPow = 100,
+    -- Misc
+    noclip = false, infJump = false, antiAFK = false, godmode = false,
+    noFall = false, autoRejoin = false, fpsBoost = false,
+    gravityOn = false, gravityVal = 196.2,
+    -- Visual
+    fullbright = false, xray = false, invisible = false,
+    esp = false, espNames = false, espObjs = {},
+    crosshair = false,
+    -- Combat
+    spinbot = false, spinSpd = 20,
+    charSpin = false, charSpinSpd = 10,
+    aimbot = false, aimRadius = 200, aimPart = "Head",
+    hitbox = false, hitboxSize = 10,
+    killAura = false, killAuraRange = 20,
+    -- UI
+    uiOpen = false, hud = true,
+}
+
+-- ═══════════ CHARACTER ═══════════
+local function UpdateChar()
+    S.char = LP.Character
+    if S.char then
+        S.hrp = S.char:FindFirstChild("HumanoidRootPart")
+        S.hum = S.char:FindFirstChildOfClass("Humanoid")
+    else
+        S.hrp = nil; S.hum = nil
+    end
+end
+UpdateChar()
+LP.CharacterAdded:Connect(function() wait_t(0.5); UpdateChar() end)
+
+-- ═══════════ NOTIFY ═══════════
+local NotifyGui = mk("ScreenGui", nil, {
+    Name = "BlackZNotify", ResetOnSpawn = false,
+    IgnoreGuiInset = true, DisplayOrder = 99999,
+})
+SafeParent(NotifyGui)
+
+local NStack = {}
+local function Notify(kind, title, text, dur)
+    pcall(function()
+        dur = dur or 3
+        local col = kind == "success" and C3RGB(0, 255, 180)
+            or kind == "warn" and C3RGB(255, 180, 40)
+            or kind == "error" and C3RGB(255, 60, 90)
+            or C3RGB(0, 220, 255)
+        if #NStack >= 3 then
+            local old = t_remove(NStack, 1)
+            pcall(function() old:Destroy() end)
+        end
+        local f = mk("Frame", NotifyGui, {
+            Size = UD2(0, 250, 0, 50),
+            Position = UD2(1, -260, 1, -66 - #NStack * 56),
+            BackgroundColor3 = C3RGB(12, 12, 18),
+            BackgroundTransparency = 0.1,
+            BorderSizePixel = 0, ZIndex = 99999,
+        })
+        corner(f, 10)
+        stroke(f, col, 1.5, 0.3)
+        mk("TextLabel", f, {
+            Size = UD2(0, 30, 1, 0), Position = UD2(0, 8, 0, 0),
+            BackgroundTransparency = 1, Text = "⚡", TextSize = 16,
+            Font = Enum.Font.GothamBold, TextColor3 = col, ZIndex = 100000,
+        })
+        mk("TextLabel", f, {
+            Size = UD2(1, -46, 0, 16), Position = UD2(0, 42, 0, 8),
+            BackgroundTransparency = 1, Text = title or "BlackZ",
+            Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = col,
+            TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 100000,
+        })
+        mk("TextLabel", f, {
+            Size = UD2(1, -46, 0, 14), Position = UD2(0, 42, 0, 26),
+            BackgroundTransparency = 1, Text = text or "",
+            Font = Enum.Font.GothamMedium, TextSize = 9,
+            TextColor3 = C3RGB(180, 180, 200),
+            TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 100000,
+        })
+        t_insert(NStack, f)
+        delay_t(dur, function()
+            for i = 1, #NStack do
+                if NStack[i] == f then t_remove(NStack, i); break end
+            end
+            if f.Parent then
+                TweenService:Create(f, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+                wait_t(0.3)
+                pcall(function() f:Destroy() end)
+            end
+        end)
+    end)
+end
+
+-- ═══════════ INVISIBLE ENGINE ═══════════
+local invisConn = nil
+local function ApplyInvisible(on)
+    if not S.char then UpdateChar(); if not S.char then return end end
+    pcall(function()
+        for _, v in ipairs(S.char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = on and 1 or 0
+                v.LocalTransparencyModifier = on and 1 or 0
+                v.CastShadow = not on
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = on and 1 or 0
+            elseif v:IsA("Accessory") then
+                local h = v:FindFirstChild("Handle")
+                if h then 
+                    h.Transparency = on and 1 or 0
+                    h.LocalTransparencyModifier = on and 1 or 0
+                end
+            end
+        end
+        if S.hum then
+            if on then
+                S.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                S.hum.NameDisplayDistance = 0
+                S.hum.HealthDisplayDistance = 0
+            else
+                S.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                S.hum.NameDisplayDistance = 100
+                S.hum.HealthDisplayDistance = 100
+            end
+        end
+    end)
+end
+
+local function EnableInvisLoop()
+    if invisConn then return end
+    invisConn = RunService.Heartbeat:Connect(function()
+        if not S.invisible or not S.char then return end
+        for _, v in ipairs(S.char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.LocalTransparencyModifier = 1
+                v.CastShadow = false
+            end
+        end
+    end)
+end
+
+local function DisableInvisLoop()
+    if invisConn then pcall(function() invisConn:Disconnect() end); invisConn = nil end
+end
+
+-- ═══════════ ESP ═══════════
+local ESPFolder = mk("Folder", nil, { Name = "BlackZESP" })
+SafeParent(ESPFolder)
+
+local function ClearESP()
+    for _, obj in pairs(S.espObjs) do pcall(function() obj:Destroy() end) end
+    S.espObjs = {}
+end
+
+local function RefreshESP()
+    if not S.esp and not S.espNames then ClearESP(); return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and not S.espObjs[p] then
+            if S.esp then
+                local hl = New("Highlight")
+                hl.Adornee = p.Character
+                hl.FillColor = C3RGB(255, 100, 100)
+                hl.FillTransparency = 0.5
+                hl.OutlineColor = C3RGB(255, 255, 255)
+                hl.OutlineTransparency = 0.3
+                hl.Parent = ESPFolder
+                S.espObjs[p] = hl
+            end
+        end
+    end
+    for k, o in pairs(S.espObjs) do
+        if typeof(k) == "Instance" and not k.Character then
+            pcall(function() o:Destroy() end)
+            S.espObjs[k] = nil
+        end
+    end
+end
+
+-- ═══════════ FIX LAG ENGINE ═══════════
+local LF = { o = {} }
+LF.o.brightness = Lighting.Brightness
+LF.o.shadows = Lighting.GlobalShadows
+LF.o.fogEnd = Lighting.FogEnd
+LF.o.fogStart = Lighting.FogStart
+LF.o.ambient = Lighting.Ambient
+LF.o.outdoor = Lighting.OutdoorAmbient
+
+local function SetLowGraphics(on)
+    pcall(function()
+        if on then
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            Lighting.Brightness = 1
+            Lighting.GlobalShadows = false
+            Lighting.EnvironmentDiffuseScale = 0
+            Lighting.EnvironmentSpecularScale = 0
+        else
+            Lighting.Brightness = LF.o.brightness
+            Lighting.GlobalShadows = LF.o.shadows
+        end
+    end)
+end
+
+local function RemoveFog(on)
+    pcall(function()
+        if on then
+            Lighting.FogEnd = 1e9
+            Lighting.FogStart = 1e9
+            Lighting.FogColor = C3RGB(0, 0, 0)
+        else
+            Lighting.FogEnd = LF.o.fogEnd
+            Lighting.FogStart = LF.o.fogStart
+        end
+    end)
+end
+
+local function NoAmbient(on)
+    pcall(function()
+        if on then
+            Lighting.Ambient = C3RGB(0, 0, 0)
+            Lighting.OutdoorAmbient = C3RGB(0, 0, 0)
+            Lighting.EnvironmentDiffuseScale = 0
+            Lighting.EnvironmentSpecularScale = 0
+        else
+            Lighting.Ambient = LF.o.ambient
+            Lighting.OutdoorAmbient = LF.o.outdoor
+        end
+    end)
+end
+
+local function ReduceShadows(on)
+    pcall(function()
+        if on then
+            Lighting.GlobalShadows = false
+        else
+            Lighting.GlobalShadows = LF.o.shadows
+        end
+    end)
+end
+
+local function RemoveTextures(on)
+    pcall(function()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Texture") then
+                if on then
+                    if not obj:GetAttribute("BZ_T") then
+                        obj:SetAttribute("BZ_T", obj.Transparency)
+                        obj.Transparency = 1
+                    end
+                else
+                    local o = obj:GetAttribute("BZ_T")
+                    if o then obj.Transparency = o; obj:SetAttribute("BZ_T", nil) end
+                end
+            end
+        end
+    end)
+end
+
+local function RemoveDecals(on)
+    pcall(function()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Decal") then
+                if on then
+                    if not obj:GetAttribute("BZ_D") then
+                        obj:SetAttribute("BZ_D", obj.Transparency)
+                        obj.Transparency = 1
+                    end
+                else
+                    local o = obj:GetAttribute("BZ_D")
+                    if o then obj.Transparency = o; obj:SetAttribute("BZ_D", nil) end
+                end
+            end
+        end
+    end)
+end
+
+local function RemoveParticles(on)
+    pcall(function()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Trail")
+                or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                if on then
+                    if obj.Enabled then
+                        obj:SetAttribute("BZ_P", true)
+                        obj.Enabled = false
+                    end
+                else
+                    if obj:GetAttribute("BZ_P") then
+                        obj.Enabled = true
+                        obj:SetAttribute("BZ_P", nil)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function DisableSkybox(on)
+    pcall(function()
+        if on then
+            local sky = Lighting:FindFirstChildOfClass("Sky")
+            if sky then _G.BZ_Sky = sky; sky.Parent = nil end
+        else
+            if _G.BZ_Sky and not _G.BZ_Sky.Parent then
+                _G.BZ_Sky.Parent = Lighting
+                _G.BZ_Sky = nil
+            end
+        end
+    end)
+end
+
+local function DestroyTerrainFX(on)
+    pcall(function()
+        local terrain = Workspace:FindFirstChildOfClass("Terrain")
+        if terrain and on then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 1
+            terrain.Decoration = false
+        end
+    end)
+end
+
+local function DisableSounds(on)
+    pcall(function()
+        if on then SoundService.AmbientReverb = Enum.ReverbType.NoReverb end
+    end)
+end
+
+local function RemoveLightingFX(on)
+    pcall(function()
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect")
+                or obj:IsA("ColorCorrectionEffect") or obj:IsA("BloomEffect")
+                or obj:IsA("DepthOfFieldEffect") then
+                if on then
+                    obj:SetAttribute("BZ_E", obj.Enabled)
+                    obj.Enabled = false
+                else
+                    local o = obj:GetAttribute("BZ_E")
+                    if o ~= nil then obj.Enabled = o; obj:SetAttribute("BZ_E", nil) end
+                end
+            end
+        end
+    end)
+end
+
+local function ApplyAll()
+    SetLowGraphics(true)
+    RemoveFog(true)
+    NoAmbient(true)
+    ReduceShadows(true)
+    RemoveTextures(true)
+    RemoveDecals(true)
+    RemoveParticles(true)
+    DisableSkybox(true)
+    DestroyTerrainFX(true)
+    DisableSounds(true)
+    RemoveLightingFX(true)
+    Notify("success", "🚀 Fix Lag", "Đã bật tất cả!", 3)
+end
+
+local function RevertAll()
+    SetLowGraphics(false)
+    RemoveFog(false)
+    NoAmbient(false)
+    ReduceShadows(false)
+    RemoveTextures(false)
+    RemoveDecals(false)
+    RemoveParticles(false)
+    DisableSkybox(false)
+    RemoveLightingFX(false)
+    Notify("warn", "♻️ Revert", "Đã hoàn tác", 3)
+end
+
+-- ═══════════ FLY ENGINE — 5 MODES ═══════════
+local flyNoclipConn = nil
+
+local function EnableFlyNoclip()
+    if flyNoclipConn then return end
+    flyNoclipConn = RunService.Stepped:Connect(function()
+        if not S.fly or not S.char then return end
+        for _, p in ipairs(S.char:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
+        end
+    end)
+end
+
+local function DisableFlyNoclip()
+    if flyNoclipConn then pcall(function() flyNoclipConn:Disconnect() end); flyNoclipConn = nil end
+end
+
+local function DestroyFlyParts()
+    if S.flyBV then pcall(function() S.flyBV:Destroy() end); S.flyBV = nil end
+    if S.flyBG then pcall(function() S.flyBG:Destroy() end); S.flyBG = nil end
+    if S.flyLV then pcall(function() S.flyLV:Destroy() end); S.flyLV = nil end
+    if S.flyAO then pcall(function() S.flyAO:Destroy() end); S.flyAO = nil end
+    if S.flyAtc then pcall(function() S.flyAtc:Destroy() end); S.flyAtc = nil end
+end
+
+local function CreateBVFly()
+    if not S.hrp then return end
+    DestroyFlyParts()
+    S.flyBV = mk("BodyVelocity", S.hrp, {
+        MaxForce = V3(1e6, 1e6, 1e6), P = 1e5, Velocity = V3z,
+    })
+    S.flyBG = mk("BodyGyro", S.hrp, {
+        MaxTorque = V3(1e6, 1e6, 1e6), P = 1e4, CFrame = S.hrp.CFrame,
+    })
+end
+
+local function CreateLVFly()
+    if not S.hrp then return end
+    DestroyFlyParts()
+    S.flyAtc = mk("Attachment", S.hrp)
+    S.flyLV = mk("LinearVelocity", S.hrp, {
+        Attachment0 = S.flyAtc, MaxForce = 1e6,
+        VelocityConstraintMode = Enum.VelocityConstraintMode.Vector,
+        VectorVelocity = V3z,
+    })
+    S.flyAO = mk("AlignOrientation", S.hrp, {
+        Attachment0 = S.flyAtc, MaxTorque = 1e6,
+        Responsiveness = 200,
+        Mode = Enum.OrientationAlignmentMode.OneAttachment,
+    })
+end
+
+local function CreateFlyPartsForMode()
+    DestroyFlyParts()
+    if S.flyMode == "BodyVelocity" then
+        CreateBVFly()
+    elseif S.flyMode == "LinearVelocity" then
+        CreateLVFly()
+    elseif S.flyMode == "Camera" then
+        S.flyBG = mk("BodyGyro", S.hrp, {
+            MaxTorque = V3(1e6, 1e6, 1e6), P = 1e4, CFrame = S.hrp.CFrame,
+        })
+    end
+end
+
+local function StartFly()
+    UpdateChar()
+    if not S.hrp or not S.hum then 
+        Notify("error", "Fly", "Không có nhân vật", 2); return 
+    end
+    S.fly = true
+    EnableFlyNoclip()
+    S.flyVel = V3z
+    S.flyTarget = nil
+    CreateFlyPartsForMode()
+    
+    if S.flyMode == "BodyVelocity" or S.flyMode == "LinearVelocity" or S.flyMode == "Camera" then
+        pcall(function()
+            S.hum.PlatformStand = true
+            S.hum:SetStateEnabled(HS.Ragdoll, false)
+            S.hum:SetStateEnabled(HS.FallingDown, false)
+        end)
+    end
+    if VJGui then VJGui.Enabled = true end
+    Notify("success", "✈️ FLY ON", "Mode: " .. S.flyMode, 2)
+end
+
+local function StopFly()
+    S.fly = false
+    DisableFlyNoclip()
+    DestroyFlyParts()
+    pcall(function() if S.hum then S.hum.PlatformStand = false end end)
+    if VJGui then VJGui.Enabled = false end
+    S.vjoy = 0
+    S.flyTarget = nil
+    Notify("warn", "✈️ FLY OFF", "", 2)
+end
+
+local function ToggleFly() if S.fly then StopFly() else StartFly() end end
+
+-- ═══ FLY RENDER LOOP — 5 MODES ═══
+RunService.RenderStepped:Connect(function(dt)
+    if not S.fly or not S.hrp or not S.hum then return end
+    if S.hum.Health <= 0 then StopFly(); return end
+    dt = m_min(dt, 0.05)
+
+    local camCF = Camera.CFrame
+    local look = camCF.LookVector
+    local right = camCF.RightVector
+    local fL = V3(look.X, 0, look.Z)
+    local fR = V3(right.X, 0, right.Z)
+    if fL.Magnitude > 0.01 then fL = fL.Unit end
+    if fR.Magnitude > 0.01 then fR = fR.Unit end
+
+    local spd = m_clamp(S.flySpd, 1, GetTier().maxSpd)
+    local target = V3z
+
+    if S.vjoyAct and m_abs(S.vjoy) > 0.05 then
+        target = target + V3(0, 1, 0) * (S.vjoy * spd)
+    end
+    local move = S.hum.MoveDirection
+    if move.Magnitude > 0.1 then
+        target = target + (fL * move.Z + fR * move.X) * spd
+    end
+
+    local rate = (target.Magnitude > 0.1) and S.flyAccel or S.flyBrake
+    local alpha = m_clamp(rate * dt, 0, 1)
+
+    -- ══ MODE 1: CFrame ══
+    if S.flyMode == "CFrame" then
+        S.flyVel = S.flyVel:Lerp(target, alpha)
+        if S.flyVel.Magnitude < 0.3 then S.flyVel = V3z end
+        local newPos = S.hrp.Position + S.flyVel * dt
+        if S.flyAltLock then newPos = V3(newPos.X, S.flyAltHeight, newPos.Z) end
+        local bL = fL
+        if S.flyVel.Magnitude > 5 then
+            local hz = V3(S.flyVel.X, 0, S.flyVel.Z)
+            if hz.Magnitude > 0.1 then bL = hz.Unit end
+        end
+        S.hrp.CFrame = CF(newPos, newPos + bL)
+        S.hrp.AssemblyLinearVelocity = V3z
+        S.hrp.AssemblyAngularVelocity = V3z
+
+    -- ══ MODE 2: Camera ══
+    elseif S.flyMode == "Camera" then
+        S.flyVel = S.flyVel:Lerp(target, alpha)
+        if S.flyVel.Magnitude < 0.3 then S.flyVel = V3z end
+        local newPos = S.hrp.Position + S.flyVel * dt
+        S.hrp.CFrame = CF(newPos, newPos + look)
+        S.hrp.AssemblyLinearVelocity = V3z
+        S.hrp.AssemblyAngularVelocity = V3z
+
+    -- ══ MODE 3: BodyVelocity ══
+    elseif S.flyMode == "BodyVelocity" then
+        S.flyVel = S.flyVel:Lerp(target, alpha)
+        if S.flyVel.Magnitude < 0.3 then S.flyVel = V3z end
+        if not S.flyBV or not S.flyBV.Parent then CreateBVFly() end
+        if S.flyBV then S.flyBV.Velocity = S.flyVel end
+        if S.flyBG then S.flyBG.CFrame = camCF end
+
+    -- ══ MODE 4: LinearVelocity ══
+    elseif S.flyMode == "LinearVelocity" then
+        S.flyVel = S.flyVel:Lerp(target, alpha)
+        if S.flyVel.Magnitude < 0.3 then S.flyVel = V3z end
+        if not S.flyLV or not S.flyLV.Parent then CreateLVFly() end
+        if S.flyLV then S.flyLV.VectorVelocity = S.flyVel end
+        if S.flyAO then S.flyAO.CFrame = camCF end
+
+    -- ══ MODE 5: Behind ══
+    elseif S.flyMode == "Behind" then
+        local nearest, minDist = nil, m_huge
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LP and p.Character then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local d = (hrp.Position - S.hrp.Position).Magnitude
+                    if d < minDist then minDist = d; nearest = hrp end
+                end
+            end
+        end
+        if nearest then
+            S.flyTarget = nearest
+            local behindPos = nearest.Position - nearest.CFrame.LookVector * 8 + V3(0, 3, 0)
+            local dir = behindPos - S.hrp.Position
+            if dir.Magnitude > 0.5 then target = dir.Unit * spd end
+        end
+        local r2 = (target.Magnitude > 0.1) and S.flyAccel or S.flyBrake
+        S.flyVel = S.flyVel:Lerp(target, m_clamp(r2 * dt, 0, 1))
+        if S.flyVel.Magnitude < 0.3 then S.flyVel = V3z end
+        local newPos = S.hrp.Position + S.flyVel * dt
+        S.hrp.CFrame = CF(newPos, newPos + fL)
+        S.hrp.AssemblyLinearVelocity = V3z
+        S.hrp.AssemblyAngularVelocity = V3z
+    end
+end)
+
+-- ═══════════ V-JOYSTICK ═══════════
+local VJGui, VJBase, VJThumb, VJTouch
+local function CreateVJoy()
+    if VJGui then return end
+    VJGui = mk("ScreenGui", nil, {
+        Name = "BlackZVJoy", ResetOnSpawn = false,
+        IgnoreGuiInset = true, DisplayOrder = 99995,
+    })
+    SafeParent(VJGui)
+    VJGui.Enabled = false
+
+    VJBase = mk("Frame", VJGui, {
+        Size = UD2(0, 60, 0, 140), Position = UD2(1, -80, 1, -170),
+        BackgroundColor3 = Theme.bg, BackgroundTransparency = 0.4,
+        BorderSizePixel = 0, ZIndex = 100,
+    })
+    corner(VJBase, 30)
+    stroke(VJBase, Theme.accent, 2, 0.3)
+
+    VJThumb = mk("Frame", VJBase, {
+        Size = UD2(0, 44, 0, 44), Position = UD2(0.5, -22, 0.5, -22),
+        BackgroundColor3 = Theme.accent, BackgroundTransparency = 0.2,
+        BorderSizePixel = 0, ZIndex = 101,
+    })
+    corner(VJThumb, 999)
+    mk("TextLabel", VJThumb, {
+        Size = UD2(1, 0, 1, 0), BackgroundTransparency = 1,
+        Text = "↕", TextColor3 = C3RGB(255, 255, 255),
+        TextSize = 20, Font = Enum.Font.GothamBold, ZIndex = 102,
+    })
+
+    local function upd(inp)
+        if not VJBase.AbsoluteSize.Y or VJBase.AbsoluteSize.Y <= 0 then return end
+        local c = VJBase.AbsolutePosition + VJBase.AbsoluteSize / 2
+        local dY = inp.Position.Y - c.Y
+        local m = (VJBase.AbsoluteSize.Y / 2) - 22
+        local cl = m_clamp(dY, -m, m)
+        S.vjoy = -cl / m
+        VJThumb.Position = UD2(0.5, -22, 0.5, cl - 22)
+    end
+    local function rst()
+        S.vjoy = 0; S.vjoyAct = false
+        if VJThumb then VJThumb.Position = UD2(0.5, -22, 0.5, -22) end
+    end
+
+    VJBase.InputBegan:Connect(function(i)
+        if i.UserInputType == UIT.Touch or i.UserInputType == UIT.MouseButton1 then
+            VJTouch = i; S.vjoyAct = true; upd(i)
+        end
+    end)
+    VJBase.InputEnded:Connect(function(i) if i == VJTouch then rst(); VJTouch = nil end end)
+    UIS.InputChanged:Connect(function(i) if i == VJTouch then upd(i) end end)
+    UIS.InputEnded:Connect(function(i) if i == VJTouch then rst(); VJTouch = nil end end)
+end
+
+-- ═══════════ MAIN UI ═══════════
+local MainGui, Window, Sidebar, Content, Pill
+local Pages, TabBtns = {}, {}
+local openMenu, closeMenu
+
+local function BuildUI()
+    if MainGui then pcall(function() MainGui:Destroy() end); MainGui = nil end
+    Pages = {}; TabBtns = {}
+
+    MainGui = mk("ScreenGui", nil, {
+        Name = "BlackZMain_v85", ResetOnSpawn = false,
+        IgnoreGuiInset = true, DisplayOrder = 99990,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    })
+    SafeParent(MainGui)
+
+    local vp = Camera.ViewportSize
+    local WW, WH = 380, m_min(560, vp.Y - 60)
+
+    Window = mk("Frame", MainGui, {
+        Size = UD2(0, WW, 0, WH),
+        Position = UD2(0.5, -WW/2, 0.5, -WH/2),
+        BackgroundColor3 = Theme.bg, BackgroundTransparency = 0.05,
+        BorderSizePixel = 0, Visible = false,
+        ClipsDescendants = true, ZIndex = 10,
+    })
+    corner(Window, 10)
+    stroke(Window, Theme.accent, 1.5, 0.4)
+
+    local TB = mk("Frame", Window, {
+        Size = UD2(1, 0, 0, 32),
+        BackgroundColor3 = Theme.bgMid, BackgroundTransparency = 0.4,
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+    mk("TextLabel", TB, {
+        Size = UD2(1, -80, 1, 0), Position = UD2(0, 12, 0, 0),
+        BackgroundTransparency = 1, Text = "⚡ BLACKZ v8.5",
+        Font = Enum.Font.GothamBlack, TextSize = 12,
+        TextColor3 = Theme.accent,
+        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12,
+    })
+
+    local CloseBtn = mk("TextButton", TB, {
+        Size = UD2(0, 18, 0, 18), Position = UD2(1, -24, 0.5, -9),
+        BackgroundColor3 = C3RGB(255, 60, 90), Text = "×",
+        TextColor3 = C3RGB(255, 255, 255), Font = Enum.Font.GothamBold,
+        TextSize = 13, AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 13,
+    })
+    corner(CloseBtn, 4)
+
+    local SID = 90
+    Sidebar = mk("Frame", Window, {
+        Size = UD2(0, SID, 1, -32), Position = UD2(0, 0, 0, 32),
+        BackgroundColor3 = Theme.bgMid, BackgroundTransparency = 0.4,
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+
+    Pill = mk("Frame", Sidebar, {
+        Size = UD2(0, 3, 0, 22), Position = UD2(0, 3, 0, 8),
+        BackgroundColor3 = Theme.accent, BorderSizePixel = 0, ZIndex = 13,
+    })
+    corner(Pill, 2)
+
+    Content = mk("ScrollingFrame", Window, {
+        Size = UD2(1, -SID - 8, 1, -40),
+        Position = UD2(0, SID + 4, 0, 36),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.accent,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        CanvasSize = UD2(0, 0, 0, 0),
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+    listLay(Content, 6)
+    uiPad(Content, 3, 4, 6, 6)
+
+    local TABS = {
+        { id = "Main", icon = "🏠", name = "Chính" },
+        { id = "LagFix", icon = "🚀", name = "Fix Lag" },
+        { id = "Fly", icon = "🕊", name = "Fly" },
+        { id = "Speed", icon = "⚡", name = "Tốc độ" },
+        { id = "Visual", icon = "👁", name = "Hiển thị" },
+        { id = "Combat", icon = "⚔", name = "Chiến đấu" },
+        { id = "Misc", icon = "⚙", name = "Khác" },
+        { id = "Teleport", icon = "🌀", name = "Dịch chuyển" },
+        { id = "Theme", icon = "🎨", name = "Màu" },
+        { id = "Info", icon = "📌", name = "Info" },
+    }
+
+    local function mkPage(id)
+        local p = mk("Frame", Content, {
+            Size = UD2(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1, Visible = false, ZIndex = 11,
+        })
+        listLay(p, 6)
+        Pages[id] = p
+        return p
+    end
+
+    local function switchTab(id)
+        for k, p in pairs(Pages) do p.Visible = (k == id) end
+        for _, tb in ipairs(TabBtns) do
+            if tb.id == id then
+                tb.lbl.TextColor3 = Theme.accent
+                tb.ico.TextColor3 = Theme.accent
+            else
+                tb.lbl.TextColor3 = Theme.sub
+                tb.ico.TextColor3 = Theme.txt
+            end
+        end
+    end
+
+    for ord, tab in ipairs(TABS) do
+        local b = mk("TextButton", Sidebar, {
+            Size = UD2(1, -6, 0, 26),
+            Position = UD2(0, 3, 0, (ord - 1) * 28 + 6),
+            BackgroundTransparency = 1, ZIndex = 12,
+            AutoButtonColor = false, Text = "",
+        })
+        corner(b, 5)
+
+        local ico = mk("TextLabel", b, {
+            Size = UD2(0, 16, 1, 0), Position = UD2(0, 6, 0, 0),
+            BackgroundTransparency = 1, Text = tab.icon,
+            TextSize = 11, TextColor3 = Theme.txt,
+            TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 13,
+        })
+        local lbl = mk("TextLabel", b, {
+            Size = UD2(1, -24, 1, 0), Position = UD2(0, 22, 0, 0),
+            BackgroundTransparency = 1, Text = tab.name,
+            TextColor3 = Theme.sub, Font = Enum.Font.GothamBold,
+            TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 13,
+        })
+
+        t_insert(TabBtns, { id = tab.id, lbl = lbl, ico = ico })
+
+        b.MouseButton1Click:Connect(function()
+            TweenService:Create(Pill, TweenInfo.new(0.3), {
+                Position = UD2(0, 3, 0, (ord - 1) * 28 + 8),
+            }):Play()
+            switchTab(tab.id)
+        end)
+
+        mkPage(tab.id)
+    end
+
+    TabBtns[1].lbl.TextColor3 = Theme.accent
+    TabBtns[1].ico.TextColor3 = Theme.accent
+    switchTab("Main")
+
+    -- ═══ UI COMPONENTS ═══
+    local function Heading(p, t)
+        return mk("TextLabel", p, {
+            Size = UD2(1, 0, 0, 18), BackgroundTransparency = 1,
+            Text = "▬ " .. t, Font = Enum.Font.GothamBold, TextSize = 11,
+            TextColor3 = Theme.accent,
+            TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12,
+        })
+    end
+
+    local function Btn(p, t, col, cb)
+        local b = mk("TextButton", p, {
+            Size = UD2(0, 155, 0, 26),
+            BackgroundColor3 = col or Theme.bgCard,
+            BackgroundTransparency = 0.15, Text = t,
+            TextColor3 = Theme.txt, Font = Enum.Font.GothamSemibold, TextSize = 10,
+            AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 12,
+        })
+        corner(b, 5)
+        stroke(b, col or Theme.accent, 1, 0.5)
+        b.MouseButton1Click:Connect(function() pcall(cb) end)
+        return b
+    end
+
+    local function Toggle(p, t, def, cb)
+        local b = mk("TextButton", p, {
+            Size = UD2(0, 155, 0, 26),
+            BackgroundColor3 = def and Theme.accent or Theme.bgCard,
+            BackgroundTransparency = def and 0.1 or 0.15,
+            Text = t,
+            TextColor3 = def and C3RGB(10, 10, 15) or Theme.txt,
+            Font = Enum.Font.GothamSemibold, TextSize = 10,
+            AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 12,
+        })
+        corner(b, 5)
+        local s = stroke(b, def and Theme.accent or Theme.sub, 1, 0.4)
+        local on = def
+        b.MouseButton1Click:Connect(function()
+            on = not on
+            b.BackgroundColor3 = on and Theme.accent or Theme.bgCard
+            b.BackgroundTransparency = on and 0.1 or 0.15
+            b.TextColor3 = on and C3RGB(10, 10, 15) or Theme.txt
+            s.Color = on and Theme.accent or Theme.sub
+            pcall(cb, on)
+        end)
+        return b
+    end
+
+    local function Slider(p, t, mn, mx, dv, cb)
+        local c = mk("Frame", p, {
+            Size = UD2(1, 0, 0, 38),
+            BackgroundColor3 = Theme.bgCard, BackgroundTransparency = 0.25,
+            BorderSizePixel = 0, ZIndex = 11,
+        })
+        corner(c, 6)
+        stroke(c, Theme.accent, 1, 0.6)
+
+        mk("TextLabel", c, {
+            Size = UD2(1, -60, 0, 14), Position = UD2(0, 8, 0, 3),
+            BackgroundTransparency = 1, Text = t,
+            TextColor3 = Theme.txt, Font = Enum.Font.GothamBold,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12,
+        })
+        local vl = mk("TextLabel", c, {
+            Size = UD2(0, 50, 0, 14), Position = UD2(1, -58, 0, 3),
+            BackgroundTransparency = 1, Text = tostring(dv),
+            Font = Enum.Font.GothamBlack, TextSize = 11,
+            TextColor3 = Theme.accent,
+            TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 12,
+        })
+        local tr = mk("Frame", c, {
+            Size = UD2(1, -16, 0, 5), Position = UD2(0, 8, 0, 24),
+            BackgroundColor3 = Theme.bgTrk, BorderSizePixel = 0, ZIndex = 12,
+        })
+        corner(tr, 3)
+        local fl = mk("Frame", tr, {
+            Size = UD2(m_clamp((dv - mn) / (mx - mn), 0, 1), 0, 1, 0),
+            BackgroundColor3 = Theme.accent, BorderSizePixel = 0, ZIndex = 13,
+        })
+        corner(fl, 3)
+
+        local dr = false
+        local function upd(i)
+            if tr.AbsoluteSize.X <= 0 then return end
+            local r = m_clamp((i.Position.X - tr.AbsolutePosition.X) / tr.AbsoluteSize.X, 0, 1)
+            fl.Size = UD2(r, 0, 1, 0)
+            local v = m_floor(mn + (mx - mn) * r)
+            vl.Text = tostring(v)
+            pcall(cb, v)
+        end
+        tr.InputBegan:Connect(function(i)
+            if i.UserInputType == UIT.MouseButton1 or i.UserInputType == UIT.Touch then
+                dr = true; upd(i)
+            end
+        end)
+        tr.InputEnded:Connect(function() dr = false end)
+        UIS.InputChanged:Connect(function(i)
+            if dr and (i.UserInputType == UIT.MouseMovement or i.UserInputType == UIT.Touch) then
+                upd(i)
+            end
+        end)
+    end
+
+    local function Dropdown(p, t, opts, def, cb)
+        local c = mk("Frame", p, {
+            Size = UD2(1, 0, 0, 38),
+            BackgroundColor3 = Theme.bgCard, BackgroundTransparency = 0.25,
+            BorderSizePixel = 0, ZIndex = 11,
+        })
+        corner(c, 6)
+        stroke(c, Theme.accent, 1, 0.6)
+
+        mk("TextLabel", c, {
+            Size = UD2(0.35, 0, 1, 0), Position = UD2(0, 8, 0, 0),
+            BackgroundTransparency = 1, Text = t,
+            TextColor3 = Theme.txt, Font = Enum.Font.GothamBold,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12,
+        })
+        local dd = mk("TextButton", c, {
+            Size = UD2(0.6, 0, 1, -8), Position = UD2(0.38, 0, 0, 4),
+            BackgroundColor3 = Theme.bgMid, Text = def,
+            TextColor3 = Theme.accent, Font = Enum.Font.GothamBold,
+            TextSize = 10, AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 13,
+        })
+        corner(dd, 5)
+
+        local list = mk("Frame", c, {
+            Size = UD2(0.6, 0, 0, 0), Position = UD2(0.38, 0, 1, 2),
+            BackgroundColor3 = Theme.bgMid, BackgroundTransparency = 0.05,
+            BorderSizePixel = 0, ClipsDescendants = true, Visible = false, ZIndex = 15,
+        })
+        corner(list, 6)
+        listLay(list, 2)
+        uiPad(list, 4, 4, 4, 4)
+
+        for _, opt in ipairs(opts) do
+            local ob = mk("TextButton", list, {
+                Size = UD2(1, 0, 0, 22),
+                BackgroundColor3 = Theme.bgCard, Text = opt,
+                TextColor3 = Theme.txt, Font = Enum.Font.GothamMedium,
+                TextSize = 10, AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 16,
+            })
+            corner(ob, 4)
+            ob.MouseButton1Click:Connect(function()
+                dd.Text = opt
+                list.Visible = false
+                list.Size = UD2(0.6, 0, 0, 0)
+                pcall(cb, opt)
+            end)
+        end
+
+        dd.MouseButton1Click:Connect(function()
+            if list.Visible then
+                list.Visible = false; list.Size = UD2(0.6, 0, 0, 0)
+            else
+                list.Visible = true; list.Size = UD2(0.6, 0, 0, #opts * 24 + 8)
+            end
+        end)
+    end
+
+    -- ═══════ TAB MAIN ═══════
+    local pMain = Pages.Main
+    Heading(pMain, "⚡ Quick Toggles")
+    local qg = mk("Frame", pMain, { Size = UD2(1, 0, 0, 92), BackgroundTransparency = 1 })
+    gridLay(qg, 2, 170, 26, 4, 4)
+
+    Toggle(qg, "✈️ Fly", false, function(v) if v then StartFly() else StopFly() end end)
+    Toggle(qg, "👻 Noclip", false, function(v) S.noclip = v end)
+    Toggle(qg, "🦘 Inf Jump", false, function(v) S.infJump = v end)
+    Toggle(qg, "🔦 Fullbright", false, function(v)
+        S.fullbright = v
+        Lighting.Brightness = v and 2 or 1
+        Lighting.GlobalShadows = not v
+    end)
+    Toggle(qg, "😴 Anti-AFK", false, function(v) S.antiAFK = v end)
+    Toggle(qg, "🛡 God", false, function(v) S.godmode = v end)
+
+    Heading(pMain, "🚨 Panic")
+    local pb = mk("TextButton", pMain, {
+        Size = UD2(1, 0, 0, 42),
+        BackgroundColor3 = C3RGB(255, 30, 30), BackgroundTransparency = 0.1,
+        Text = "🚨 PANIC - Ẩn ngay", TextColor3 = C3RGB(255, 255, 255),
+        Font = Enum.Font.GothamBlack, TextSize = 12,
+        AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 12,
+    })
+    corner(pb, 8)
+    pb.MouseButton1Click:Connect(function()
+        Window.Visible = false
+        S.uiOpen = false
+        if S.fly then StopFly() end
+        if VJGui then VJGui.Enabled = false end
+    end)
+
+    -- ═══════ TAB FIX LAG ═══════
+    local pLag = Pages.LagFix
+    Heading(pLag, "🚀 Fix Lag Nâng Cao")
+
+    local info = mk("Frame", pLag, {
+        Size = UD2(1, 0, 0, 50),
+        BackgroundColor3 = C3RGB(60, 30, 20), BackgroundTransparency = 0.25,
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+    corner(info, 8)
+    stroke(info, C3RGB(255, 180, 40), 1.5, 0.3)
+    mk("TextLabel", info, {
+        Size = UD2(1, -16, 1, 0), Position = UD2(0, 8, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "⚠️ Giảm đồ họa để tăng FPS",
+        TextColor3 = C3RGB(255, 180, 40),
+        Font = Enum.Font.GothamBold, TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12,
+    })
+
+    Heading(pLag, "⚡ Quick Actions")
+    local ql = mk("Frame", pLag, { Size = UD2(1, 0, 0, 60), BackgroundTransparency = 1 })
+    gridLay(ql, 2, 170, 26, 4, 4)
+    Btn(ql, "🚀 BẬT TẤT CẢ", C3RGB(255, 100, 100), ApplyAll)
+    Btn(ql, "♻️ HOÀN TÁC", C3RGB(80, 255, 120), RevertAll)
+
+    Heading(pLag, "🎨 Graphics")
+    local gl = mk("Frame", pLag, { Size = UD2(1, 0, 0, 88), BackgroundTransparency = 1 })
+    gridLay(gl, 2, 170, 26, 4, 4)
+    Toggle(gl, "📉 Low Graphics", false, SetLowGraphics)
+    Toggle(gl, "🌫️ Xóa Sương Mù", false, RemoveFog)
+    Toggle(gl, "🌑 No Ambient", false, NoAmbient)
+    Toggle(gl, "☁️ Xóa Skybox", false, DisableSkybox)
+
+    Heading(pLag, "🖼️ Textures & Effects")
+    local tl = mk("Frame", pLag, { Size = UD2(1, 0, 0, 88), BackgroundTransparency = 1 })
+    gridLay(tl, 2, 170, 26, 4, 4)
+    Toggle(tl, "🖼️ Xóa Textures", false, RemoveTextures)
+    Toggle(tl, "🏷️ Xóa Decals", false, RemoveDecals)
+    Toggle(tl, "✨ Xóa Particles", false, RemoveParticles)
+    Toggle(tl, "🌊 Xóa Water", false, DestroyTerrainFX)
+
+    Heading(pLag, "🌍 Environment")
+    local el = mk("Frame", pLag, { Size = UD2(1, 0, 0, 60), BackgroundTransparency = 1 })
+    gridLay(el, 2, 170, 26, 4, 4)
+    Toggle(el, "🔇 Tắt Sounds", false, DisableSounds)
+    Toggle(el, "🌑 Giảm Shadows", false, ReduceShadows)
+
+    Heading(pLag, "💡 Tips")
+    local tips = mk("Frame", pLag, {
+        Size = UD2(1, 0, 0, 110),
+        BackgroundColor3 = Theme.bgCard, BackgroundTransparency = 0.25,
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+    corner(tips, 8)
+    mk("TextLabel", tips, {
+        Size = UD2(1, -16, 1, -12), Position = UD2(0, 8, 0, 6),
+        BackgroundTransparency = 1,
+        Text = "💡 MẸO:\n" ..
+               "• Bật 'Low Graphics' + 'No Ambient' để tăng FPS\n" ..
+               "• Bật 'Xóa Particles' nếu game nhiều hiệu ứng\n" ..
+               "• Bấm 'HOÀN TÁC' để khôi phục đồ họa\n" ..
+               "• Nếu lag vẫn cao → bấm BẬT TẤT CẢ",
+        TextColor3 = Theme.sub, Font = Enum.Font.GothamMedium, TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true, ZIndex = 12,
+    })
+
+    -- ═══════ TAB FLY ═══════
+    local pFly = Pages.Fly
+    Heading(pFly, "✈️ Control")
+    Toggle(pFly, "✈️ BẬT FLY", false, function(v) if v then StartFly() else StopFly() end end)
+
+    Heading(pFly, "🎮 Mode (5 chế độ)")
+    Dropdown(pFly, "Mode", {
+        "CFrame",
+        "Camera",
+        "BodyVelocity",
+        "LinearVelocity",
+        "Behind",
+    }, "CFrame", function(o)
+        S.flyMode = o
+        if S.fly then StopFly(); wait_t(0.1); StartFly() end
+        Notify("info", "Mode", o, 2)
+    end)
+
+    Heading(pFly, "📊 Thông số")
+    Slider(pFly, "✈️ Fly Speed", 30, 500, S.flySpd, function(v)
+        if v > GetTier().maxSpd then v = GetTier().maxSpd end
+        S.flySpd = v
+    end)
+    Slider(pFly, "🏎️ Accel", 3, 40, S.flyAccel, function(v) S.flyAccel = v end)
+    Slider(pFly, "🛑 Brake", 5, 60, S.flyBrake, function(v) S.flyBrake = v end)
+
+    Heading(pFly, "🎯 Altitude Lock (VIP+)")
+    Toggle(pFly, "🎯 Lock Độ Cao", false, function(v)
+        if v and not GetTier().invis then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.flyAltLock = v
+    end)
+    Slider(pFly, "📏 Altitude", 10, 500, S.flyAltHeight, function(v) S.flyAltHeight = v end)
+
+    -- ═══════ TAB SPEED ═══════
+    local pSpd = Pages.Speed
+    Heading(pSpd, "🚶 Walk Speed")
+    Slider(pSpd, "🚶 WalkSpeed", 16, 300, S.walkSpd, function(v)
+        S.walkSpd = v
+        if S.hum then pcall(function() S.hum.WalkSpeed = v end) end
+    end)
+    Slider(pSpd, "🦘 JumpPower", 50, 300, S.jumpPow, function(v)
+        S.jumpPow = v
+        if S.hum then pcall(function() S.hum.JumpPower = v end) end
+    end)
+
+    -- ═══════ TAB VISUAL ═══════
+    local pVis = Pages.Visual
+    Heading(pVis, "👁 Hiển thị")
+    Toggle(pVis, "🔦 Fullbright", false, function(v)
+        S.fullbright = v
+        Lighting.Brightness = v and 2 or 1
+        Lighting.GlobalShadows = not v
+    end)
+    Toggle(pVis, "👁 X-Ray", false, function(v) S.xray = v end)
+
+    Heading(pVis, "👻 Tàng hình (VIP+)")
+    Toggle(pVis, "👻 Invisible", false, function(v)
+        if v and not GetTier().invis then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.invisible = v
+        ApplyInvisible(v)
+        if v then EnableInvisLoop() else DisableInvisLoop() end
+    end)
+
+    Heading(pVis, "📡 ESP (VIP+)")
+    Toggle(pVis, "📡 ESP Highlight", false, function(v)
+        if v and not GetTier().esp then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.esp = v; ClearESP()
+    end)
+    Toggle(pVis, "📛 ESP Names", false, function(v)
+        if v and not GetTier().esp then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.espNames = v; ClearESP()
+    end)
+
+    -- ═══════ TAB COMBAT ═══════
+    local pCom = Pages.Combat
+    Heading(pCom, "🎯 Aimbot (ULTRA)")
+    Toggle(pCom, "🎯 Aimbot", false, function(v)
+        if v and not GetTier().aim then
+            Notify("error", "ULTRA", "Cần ULTRA VIP", 3); return
+        end
+        S.aimbot = v
+    end)
+    Dropdown(pCom, "Part", { "Head", "HumanoidRootPart", "UpperTorso" }, "Head", function(o)
+        S.aimPart = o
+    end)
+    Slider(pCom, "Radius", 50, 500, S.aimRadius, function(v) S.aimRadius = v end)
+
+    Heading(pCom, "🔄 Spinbot (VIP+)")
+    Toggle(pCom, "🔄 Spinbot", false, function(v)
+        if v and not GetTier().spin then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.spinbot = v
+    end)
+    Slider(pCom, "Spin Speed", 5, 100, S.spinSpd, function(v) S.spinSpd = v end)
+
+    Toggle(pCom, "💫 Char Spin", false, function(v)
+        if v and not GetTier().spin then
+            Notify("error", "VIP", "Cần VIP trở lên", 3); return
+        end
+        S.charSpin = v
+    end)
+
+    Heading(pCom, "⚔️ Chiến đấu")
+    Toggle(pCom, "⚔️ Kill Aura", false, function(v) S.killAura = v end)
+    Slider(pCom, "Aura Range", 5, 50, S.killAuraRange, function(v) S.killAuraRange = v end)
+    Toggle(pCom, "📏 Hitbox Expand", false, function(v) S.hitbox = v end)
+    Slider(pCom, "Hitbox Size", 5, 30, S.hitboxSize, function(v) S.hitboxSize = v end)
+
+    -- ═══════ TAB MISC ═══════
+    local pMis = Pages.Misc
+    Heading(pMis, "⚙️ General")
+    Toggle(pMis, "🛡️ Godmode", false, function(v) S.godmode = v end)
+    Toggle(pMis, "👻 Noclip", false, function(v) S.noclip = v end)
+    Toggle(pMis, "🦘 Inf Jump", false, function(v) S.infJump = v end)
+    Toggle(pMis, "😴 Anti-AFK", false, function(v) S.antiAFK = v end)
+    Toggle(pMis, "🛬 No Fall", false, function(v) S.noFall = v end)
+
+    Heading(pMis, "🔧 System")
+    Toggle(pMis, "🔄 Auto Rejoin", false, function(v) S.autoRejoin = v end)
+    Toggle(pMis, "🚀 FPS Boost", false, function(v)
+        S.fpsBoost = v
+        pcall(function()
+            if v then
+                Lighting.GlobalShadows = false
+                Lighting.FogEnd = 1e9
+                if setfpscap then setfpscap(240) end
+            else
+                Lighting.GlobalShadows = true
+                if setfpscap then setfpscap(60) end
+            end
+        end)
+    end)
+
+    Heading(pMis, "🌍 Gravity")
+    Toggle(pMis, "🌍 Custom Gravity", false, function(v)
+        S.gravityOn = v
+        if v then Workspace.Gravity = S.gravityVal else Workspace.Gravity = 196.2 end
+    end)
+
+    Heading(pMis, "🌤️ Weather")
+    local wg = mk("Frame", pMis, { Size = UD2(1, 0, 0, 60), BackgroundTransparency = 1 })
+    gridLay(wg, 2, 170, 26, 4, 4)
+    Btn(wg, "☀️ Day", Theme.accent, function()
+        pcall(function()
+            Lighting.ClockTime = 14; Lighting.Brightness = 2
+            Lighting.OutdoorAmbient = C3RGB(140, 140, 140)
+        end)
+    end)
+    Btn(wg, "🌙 Night", C3RGB(100, 100, 200), function()
+        pcall(function()
+            Lighting.ClockTime = 0; Lighting.Brightness = 0.5
+            Lighting.OutdoorAmbient = C3RGB(40, 40, 60)
+        end)
+    end)
+
+    Heading(pMis, "⚠️ Nguy hiểm")
+    local dg = mk("Frame", pMis, { Size = UD2(1, 0, 0, 30), BackgroundTransparency = 1 })
+    gridLay(dg, 2, 170, 26, 4, 4)
+    Btn(dg, "🔄 Reset Char", C3RGB(255, 100, 100), function()
+        if LP.Character then LP.Character:BreakJoints() end
+    end)
+    Btn(dg, "🗑 Unload", C3RGB(255, 60, 60), function()
+        _G.BlackZ_Alive = false
+        if MainGui then MainGui:Destroy() end
+        if NotifyGui then NotifyGui:Destroy() end
+        if VJGui then VJGui:Destroy() end
+        if FloatGui then FloatGui:Destroy() end
+    end)
+
+    -- ═══════ TAB TELEPORT ═══════
+    local pTP = Pages.Teleport
+    Heading(pTP, "🌀 Teleport (VIP+)")
+    Btn(pTP, "🌍 TP Random", Theme.accent, function()
+        if not GetTier().tp then Notify("error", "VIP", "Cần VIP", 3); return end
+        if S.hrp then
+            S.hrp.CFrame = CF(V3(m_random(-500, 500), 50, m_random(-500, 500)))
+            Notify("success", "TP", "Đã TP", 2)
+        end
+    end)
+    Btn(pTP, "⬆️ Lên Cao 500", Theme.accent, function()
+        if not GetTier().tp then Notify("error", "VIP", "Cần VIP", 3); return end
+        if S.hrp then S.hrp.CFrame = S.hrp.CFrame + V3(0, 500, 0) end
+    end)
+    Btn(pTP, "📌 Lưu Vị Trí", C3RGB(80, 255, 120), function()
+        if S.hrp then
+            _G.BZ_Saved = S.hrp.Position
+            Notify("success", "Saved", "Đã lưu", 2)
+        end
+    end)
+    Btn(pTP, "🚀 Về Vị Trí", C3RGB(80, 255, 120), function()
+        if _G.BZ_Saved and S.hrp then
+            S.hrp.CFrame = CF(_G.BZ_Saved + V3(0, 3, 0))
+            Notify("success", "TP", "Về vị trí", 2)
+        end
+    end)
+
+    -- ═══════ TAB THEME ═══════
+    local pThm = Pages.Theme
+    if not GetTier().theme then
+        Heading(pThm, "🔒 VIP Only")
+    else
+        Heading(pThm, "🎨 Preset Theme")
+        local pf = mk("Frame", pThm, { Size = UD2(1, 0, 0, 130), BackgroundTransparency = 1 })
+        gridLay(pf, 4, 80, 34, 4, 4)
+
+        for _, preset in ipairs(ThemePresets) do
+            local b = mk("TextButton", pf, {
+                Size = UD2(0, 32, 0, 32), BackgroundColor3 = preset.c1,
+                Text = "", AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 12,
+            })
+            corner(b, 6)
+            stroke(b, C3RGB(255, 255, 255), 1.5, 0.5)
+            b.MouseButton1Click:Connect(function()
+                Theme.accent = preset.c1
+                Theme.accent2 = preset.c2
+                Notify("success", "Theme", preset.name, 2)
+                spawn_t(function()
+                    wait_t(0.15)
+                    BuildUI()
+                    if openMenu then openMenu() end
+                    switchTab("Theme")
+                end)
+            end)
+        end
+    end
+
+    -- ═══════ TAB INFO ═══════
+    local pInfo = Pages.Info
+    Heading(pInfo, "📌 Thông tin")
+    local ic = mk("Frame", pInfo, {
+        Size = UD2(1, 0, 0, 150),
+        BackgroundColor3 = Theme.bgCard, BackgroundTransparency = 0.25,
+        BorderSizePixel = 0, ZIndex = 11,
+    })
+    corner(ic, 6)
+    local infoLbl = mk("TextLabel", ic, {
+        Size = UD2(1, -16, 1, -12), Position = UD2(0, 8, 0, 6),
+        BackgroundTransparency = 1,
+        Text = "Loading...",
+        TextColor3 = Theme.txt, Font = Enum.Font.Code, TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true, ZIndex = 12,
+    })
+    spawn_t(function()
+        while infoLbl.Parent do
+            wait_t(1)
+            pcall(function()
+                infoLbl.Text = s_format(
+                    "⚡ BLACKZ v8.5\n" ..
+                    "━━━━━━━━━━━━━━━━\n" ..
+                    "👤 %s\n" ..
+                    "🎮 %d\n" ..
+                    "👑 %s\n" ..
+                    "✈️ Fly: %s | %s\n" ..
+                    "🚶 Speed: %d\n" ..
+                    "━━━━━━━━━━━━━━━━\n" ..
+                    "⌨️ RightShift | P | K",
+                    LP.Name, game.PlaceId, KeyState.tier,
+                    S.fly and "ON" or "OFF", S.flyMode, S.walkSpd
+                )
+            end)
+        end
+    end)
+
+    -- ═══ Window controls ═══
+    local function openFn()
+        S.uiOpen = true
+        Window.Visible = true
+        Window.Size = UD2(0, WW * 0.9, 0, WH * 0.9)
+        TweenService:Create(Window, TweenInfo.new(0.3), { Size = UD2(0, WW, 0, WH) }):Play()
+    end
+    local function closeFn()
+        S.uiOpen = false
+        TweenService:Create(Window, TweenInfo.new(0.25), { Size = UD2(0, WW * 0.9, 0, WH * 0.9) }):Play()
+        wait_t(0.25)
+        Window.Visible = false
+    end
+    openMenu = openFn
+    closeMenu = closeFn
+
+    CloseBtn.MouseButton1Click:Connect(closeFn)
+
+    local drag, ds, ws
+    TB.InputBegan:Connect(function(i)
+        if i.UserInputType == UIT.MouseButton1 or i.UserInputType == UIT.Touch then
+            drag = true; ds = i.Position; ws = Window.Position
+        end
+    end)
+    TB.InputEnded:Connect(function() drag = false end)
+    UIS.InputChanged:Connect(function(i)
+        if drag and (i.UserInputType == UIT.MouseMovement or i.UserInputType == UIT.Touch) then
+            local d = i.Position - ds
+            Window.Position = UD2(ws.X.Scale, ws.X.Offset + d.X, ws.Y.Scale, ws.Y.Offset + d.Y)
+        end
+    end)
+end
+
+-- ═══════════ FLOAT BUTTON ═══════════
+local FloatGui = mk("ScreenGui", nil, {
+    Name = "BlackZFloats", ResetOnSpawn = false,
+    IgnoreGuiInset = true, DisplayOrder = 99989,
+})
+SafeParent(FloatGui)
+
+local function MakeFloat(icon, yp, cb, col)
+    local b = mk("TextButton", FloatGui, {
+        Size = UD2(0, 42, 0, 42),
+        Position = UD2(1, -52, 0, yp),
+        BackgroundColor3 = Theme.bg, BackgroundTransparency = 0.1,
+        Text = icon, TextSize = 18, Font = Enum.Font.GothamBold,
+        TextColor3 = col or Theme.accent,
+        AutoButtonColor = false, BorderSizePixel = 0, ZIndex = 998,
+    })
+    corner(b, 999)
+    stroke(b, col or Theme.accent, 2, 0.3)
+    b.MouseButton1Click:Connect(function() pcall(cb) end)
+
+    local drag, ds, sp
+    b.InputBegan:Connect(function(i)
+        if i.UserInputType == UIT.MouseButton1 or i.UserInputType == UIT.Touch then
+            drag = true; ds = i.Position; sp = b.Position
+        end
+    end)
+    b.InputEnded:Connect(function() drag = false end)
+    UIS.InputChanged:Connect(function(i)
+        if drag and (i.UserInputType == UIT.MouseMovement or i.UserInputType == UIT.Touch) then
+            local d = i.Position - ds
+            b.Position = UD2(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+        end
+    end)
+    return b
+end
+
+-- ═══════════ KEY UI ═══════════
+local function BuildKeyUI()
+    local KeyGui = mk("ScreenGui", nil, {
+        Name = "BlackZKey", ResetOnSpawn = false,
+        IgnoreGuiInset = true, DisplayOrder = 99999,
+    })
+    SafeParent(KeyGui)
+
+    local Card = mk("Frame", KeyGui, {
+        Size = UD2(0, 280, 0, 200),
+        Position = UD2(0.5, -140, 0.5, -100),
+        BackgroundColor3 = Theme.bg, BorderSizePixel = 0,
+    })
+    corner(Card, 12)
+    stroke(Card, Theme.accent, 2, 0.3)
+
+    mk("TextLabel", Card, {
+        Size = UD2(1, -20, 0, 30), Position = UD2(0, 10, 0, 14),
+        BackgroundTransparency = 1, Text = "⚡ BLACKZ v8.5",
+        Font = Enum.Font.GothamBlack, TextSize = 18,
+        TextColor3 = Theme.accent,
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    mk("TextLabel", Card, {
+        Size = UD2(1, -20, 0, 16), Position = UD2(0, 10, 0, 46),
+        BackgroundTransparency = 1, Text = "Nhập key để mở menu",
+        TextColor3 = Theme.sub, Font = Enum.Font.GothamMedium,
+        TextSize = 10, TextXAlignment = Enum.TextXAlignment.Center,
+    })
+
+    local KB = mk("Frame", Card, {
+        Size = UD2(1, -28, 0, 40), Position = UD2(0, 14, 0, 72),
+        BackgroundColor3 = Theme.bgCard, BorderSizePixel = 0,
+    })
+    corner(KB, 8)
+    stroke(KB, Theme.accent, 1.5, 0.4)
+
+    local KeyBox = mk("TextBox", KB, {
+        Size = UD2(1, -16, 1, 0), Position = UD2(0, 8, 0, 0),
+        BackgroundTransparency = 1, Text = "",
+        PlaceholderText = "blackzfree | blackzmid | blackzpro",
+        TextColor3 = Theme.txt, PlaceholderColor3 = Theme.sub,
+        Font = Enum.Font.GothamSemibold, TextSize = 11, ClearTextOnFocus = false,
+    })
+
+    local SB = mk("TextButton", Card, {
+        Size = UD2(1, -28, 0, 40), Position = UD2(0, 14, 0, 122),
+        BackgroundColor3 = Theme.accent, Text = "🔓 MỞ MENU",
+        TextColor3 = C3RGB(10, 10, 15), Font = Enum.Font.GothamBlack,
+        TextSize = 12, AutoButtonColor = false, BorderSizePixel = 0,
+    })
+    corner(SB, 8)
+
+    local ML = mk("TextLabel", Card, {
+        Size = UD2(1, -20, 0, 26), Position = UD2(0, 10, 0, 166),
+        BackgroundTransparency = 1, Text = "", TextColor3 = Theme.sub,
+        Font = Enum.Font.GothamMedium, TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true,
+    })
+
+    local submitted = false
+    local function TrySubmit()
+        if submitted then return end
+        local ok, msg = VerifyKey(KeyBox.Text)
+        if ok then
+            submitted = true
+            ML.Text = "✅ " .. msg .. " — " .. KeyState.tier
+            ML.TextColor3 = C3RGB(80, 255, 120)
+            spawn_t(function()
+                wait_t(0.3)
+                pcall(function() KeyGui:Destroy() end)
+            end)
+            if not _G.BlackZ_Built then
+                _G.BlackZ_Built = true
+                BuildUI()
+                CreateVJoy()
+
+                MakeFloat("⚡", 15, function()
+                    if S.uiOpen then if closeMenu then closeMenu() end
+                    else if openMenu then openMenu() end end
+                end, Theme.accent)
+                MakeFloat("🕊", 62, ToggleFly, C3RGB(80, 255, 120))
+                MakeFloat("🚀", 109, ApplyAll, C3RGB(255, 180, 40))
+                MakeFloat("🚨", 156, function()
+                    if closeMenu then closeMenu() end
+                    if S.fly then StopFly() end
+                end, C3RGB(255, 60, 60))
+
+                wait_t(0.3)
+                if openMenu then openMenu() end
+            end
+        else
+            ML.Text = "❌ " .. msg
+            ML.TextColor3 = C3RGB(255, 60, 90)
+            KeyBox.Text = ""
+        end
+    end
+
+    SB.MouseButton1Click:Connect(TrySubmit)
+    KeyBox.FocusLost:Connect(function(e) if e then TrySubmit() end end)
+end
+
+-- ═══════════ LOOPS (TỐI ƯU — Chỉ chạy khi cần) ═══════════
+
+-- Loop 1: Chung (0.5s/lần) — UpdateChar + Speed + Noclip + God + NoFall
+spawn_t(function()
+    while true do
+        wait_t(0.5)
+        pcall(function()
+            UpdateChar()
+            if S.hum and S.hum.Health > 0 then
+                if S.hum.WalkSpeed ~= S.walkSpd then S.hum.WalkSpeed = S.walkSpd end
+                if S.hum.JumpPower ~= S.jumpPow then S.hum.JumpPower = S.jumpPow end
+                if S.godmode and S.hum.Health < S.hum.MaxHealth then S.hum.Health = S.hum.MaxHealth end
+                if S.noclip and S.char then
+                    for _, p in ipairs(S.char:GetDescendants()) do
+                        if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
+                    end
+                end
+                if S.noFall then S.hum:SetStateEnabled(HS.FallingDown, false) end
+            end
+        end)
+    end
+end)
+
+-- Loop 2: Jump (chỉ khi bật)
+UIS.JumpRequest:Connect(function()
+    if S.infJump and S.hum then
+        pcall(function() S.hum:ChangeState(HS.Jumping) end)
+    end
+end)
+
+-- Loop 3: Anti-AFK (60s/lần)
+spawn_t(function()
+    while true do
+        wait_t(60)
+        if S.antiAFK then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(V2(0, 0))
+            end)
+        end
+    end
+end)
+
+-- Loop 4: Auto Rejoin (10s/lần)
+spawn_t(function()
+    while true do
+        wait_t(10)
+        if S.autoRejoin and not LP.Parent then
+            pcall(function()
+                TeleportService:Teleport(game.PlaceId, LP)
+            end)
+        end
+    end
+end)
+
+-- Loop 5: Spinbot (chỉ khi bật)
+spawn_t(function()
+    while true do
+        wait_t(0.05)
+        if S.spinbot and S.hrp then
+            pcall(function()
+                S.hrp.CFrame = S.hrp.CFrame * CFAng(0, m_rad(S.spinSpd * 1.2), 0)
+            end)
+        end
+    end
+end)
+
+-- Loop 6: Char Spin (chỉ khi bật)
+spawn_t(function()
+    while true do
+        wait_t(0.1)
+        if S.charSpin and S.hrp then
+            pcall(function()
+                S.hrp.CFrame = S.hrp.CFrame * CFAng(0, m_rad(S.charSpinSpd), 0)
+            end)
+        end
+    end
+end)
+
+-- Loop 7: Combat (0.3s/lần) — KillAura + Hitbox
+spawn_t(function()
+    while true do
+        wait_t(0.3)
+        if S.killAura and S.hrp then
+            pcall(function()
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LP and p.Character then
+                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if hrp and hum and hum.Health > 0 then
+                            if (hrp.Position - S.hrp.Position).Magnitude <= S.killAuraRange then
+                                hum.Health = 0
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+        if S.hitbox then
+            pcall(function()
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LP and p.Character then
+                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            hrp.Size = V3(S.hitboxSize, S.hitboxSize, S.hitboxSize)
+                            hrp.Transparency = 1
+                            hrp.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Loop 8: Aimbot (chỉ khi bật)
+spawn_t(function()
+    while true do
+        wait_t(0.1)
+        if S.aimbot then
+            pcall(function()
+                local closest, minD = nil, S.aimRadius
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LP and p.Character then
+                        local tp = p.Character:FindFirstChild(S.aimPart)
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if tp and hum and hum.Health > 0 and S.hrp then
+                            local d = (tp.Position - S.hrp.Position).Magnitude
+                            if d < minD then minD = d; closest = tp end
+                        end
+                    end
+                end
+                if closest then
+                    Camera.CFrame = CF(Camera.CFrame.Position, closest.Position)
+                end
+            end)
+        end
+    end
+end)
+
+-- Loop 9: ESP (chỉ khi bật, 1s/lần)
+spawn_t(function()
+    while true do
+        wait_t(1)
+        if S.esp or S.espNames then
+            RefreshESP()
+        end
+    end
+end)
+
+-- Loop 10: X-Ray (chỉ khi bật, 3s/lần)
+spawn_t(function()
+    while true do
+        wait_t(3)
+        if S.xray then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") and not obj:IsDescendantOf(LP.Character) then
+                        local isPlayer = false
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p.Character and obj:IsDescendantOf(p.Character) then
+                                isPlayer = true; break
+                            end
+                        end
+                        if not isPlayer then obj.Transparency = 0.6 end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Loop 11: GC Cleanup (3 phút/lần)
+spawn_t(function()
+    while true do
+        wait_t(180)
+        pcall(function() collectgarbage("collect") end)
+    end
+end)
+
+-- ═══════════ HOTKEYS ═══════════
+UIS.InputBegan:Connect(function(i, gp)
+    if gp then return end
+    if UIS:GetFocusedTextBox() then return end
+    if i.KeyCode == KS.RightShift then
+        if S.uiOpen then if closeMenu then closeMenu() end
+        else if openMenu then openMenu() end end
+    elseif i.KeyCode == KS.P then
+        ToggleFly()
+    elseif i.KeyCode == KS.K then
+        if closeMenu then closeMenu() end
+        if S.fly then StopFly() end
+        if VJGui then VJGui.Enabled = false end
+    elseif i.KeyCode == KS.Space then
+        if S.fly then S.vjoyAct = true; S.vjoy = 1 end
+    elseif i.KeyCode == KS.LeftShift then
+        if S.fly then S.vjoyAct = true; S.vjoy = -1 end
+    end
+end)
+
+UIS.InputEnded:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == KS.Space or i.KeyCode == KS.LeftShift then
+        if S.fly then S.vjoyAct = false; S.vjoy = 0 end
+    end
+end)
+
+-- ═══════════ BOOT ═══════════
+spawn_t(function()
+    xpcall(BuildKeyUI, function(e)
+        print("[BOOT ERR]", tostring(e))
+    end)
+end)
+
+print("═══════════════════════════════════════════════")
+print("✅ BLACKZ v8.5 FULL ULTIMATE — ĐÃ LOAD")
+print("🔑 Keys: blackzfree | blackzmid | blackzpro")
+print("⌨️ RightShift: Menu | P: Fly | K: Panic")
+print("✈️ 5 Fly Modes: CFrame / Camera / BodyVelocity / LinearVelocity / Behind")
+print("🚀 Fix Lag có sẵn (11 tính năng)")
+print("⚔️ Combat: Aimbot / Spinbot / Kill Aura / Hitbox")
+print("═══════════════════════════════════════════════")
