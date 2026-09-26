@@ -1,15 +1,14 @@
 --[[
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║ HOSHI HUB v4.0 — ANTI-KICK HARDENED EDITION                                  ║
-║ 🌈 Rainbow Menu | 📡 Remote Fire | 🥚 Auto Farm | ⚔️ Combat                 ║
-║ ✅ 20-layer defense engine (from TITAN + BLACKZ reference)                   ║
-║ ✅ Hook __namecall + Player.Kick + Teleport                                  ║
-║ ✅ Purge anti-cheat Remotes/Scripts (keyword-based GC scan)                  ║
-║ ✅ Watchdog auto-rehook every 1s                                             ║
-║ ✅ UI hidden in gethui() — không bị quét                                      ║
-║ ✅ Network ownership protection                                              ║
-║ ✅ Auto-Reconnect on disconnect                                              ║
-║ ✅ Full graceful UnloadScript() with state restore                           ║
+║ STEAL AN EGG — ULTIMATE AUTO FARM v5.0                                       ║
+║ 🛡️ Anti-Kick 14 lớp | 🥚 Tween Farm (chống AC) | ⚔️ Combat | ✈️ Fly         ║
+║ ✅ Movement dùng TweenService (không CFrame snap = không bị kick)            ║
+║ ✅ Hook __namecall + Player.Kick + Watchdog 1s                               ║
+║ ✅ UI hidden trong gethui() — không bị anti-cheat quét                       ║
+║ ✅ Purge AC remotes/scripts (GC scan keyword)                                ║
+║ ✅ Noclip RunService.Stepped (physics-sync, không jitter)                    ║
+║ ✅ Humanization: random delay + jitter position                              ║
+║ ✅ Graceful UnloadScript() restore 100% state                                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 --]]
 
@@ -27,19 +26,20 @@ local VirtualUser       = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService   = game:GetService("TeleportService")
 local ScriptContext     = game:GetService("ScriptContext")
+local StarterGui        = game:GetService("StarterGui")
 local LP                = Players.LocalPlayer
 
 local pcall              = pcall
 local xpcall             = xpcall
 local ipairs             = ipairs
 local pairs              = pairs
-local next               = next
 local type               = type
 local typeof             = typeof
 local tostring           = tostring
 local tonumber           = tonumber
 local Vector2_new        = Vector2.new
 local Vector3_new        = Vector3.new
+local Vector3_zero       = Vector3.new(0, 0, 0)
 local CFrame_new         = CFrame.new
 local CFrame_lookAt      = CFrame.lookAt
 local Color3_RGB         = Color3.fromRGB
@@ -58,6 +58,7 @@ local math_random        = math.random
 local math_min           = math.min
 local math_max           = math.max
 local math_huge          = math.huge
+local math_abs           = math.abs
 local table_insert       = table.insert
 local table_remove       = table.remove
 local string_format      = string.format
@@ -66,7 +67,7 @@ local string_find        = string.find
 local string_gsub        = string.gsub
 local os_clock           = os.clock
 
--- Executor globals
+-- Executor APIs (guarded)
 local hookmetamethod    = hookmetamethod
 local hookfunction      = hookfunction
 local newcclosure       = newcclosure
@@ -86,16 +87,16 @@ local DEBUG_MODE = true
 local Logger = {}
 function Logger.log(tag, msg)
     if DEBUG_MODE then
-        print(string_format("[HOSHI][%s] %s", tostring(tag), tostring(msg)))
+        print(string_format("[EGG][%s] %s", tostring(tag), tostring(msg)))
     end
 end
 function Logger.err(tag, msg, err)
-    warn(string_format("[HOSHI][%s][ERROR] %s | %s",
+    warn(string_format("[EGG][%s][ERROR] %s | %s",
         tostring(tag), tostring(msg), tostring(err)))
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 03] HIDDEN PARENT — gethui() để không bị anti-cheat quét
+-- [MODULE 03] HIDDEN PARENT (gethui để tránh AC quét)
 -- ═══════════════════════════════════════════════════════════════════════════
 local HIDDEN_PARENT = CoreGui
 pcall(function()
@@ -147,17 +148,17 @@ function Lifecycle.Destroy()
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 05] ANTI-KICK ENGINE v4.0 — 20 LAYERS
+-- [MODULE 05] ANTI-KICK ENGINE — 14 LAYERS
 -- ═══════════════════════════════════════════════════════════════════════════
 local Defense = {
-    ACTIVE          = true,
-    KICK_BLOCKED    = 0,
-    TELEPORT_BLOCKED= 0,
-    REMOTES_KILLED  = 0,
-    SCRIPTS_KILLED  = 0,
-    HOOKS_RESTORED  = 0,
-    WATCHDOG_TICKS  = 0,
-    MEMORY_SCANS    = 0,
+    ACTIVE           = true,
+    KICK_BLOCKED     = 0,
+    TELEPORT_BLOCKED = 0,
+    REMOTES_KILLED   = 0,
+    SCRIPTS_KILLED   = 0,
+    HOOKS_RESTORED   = 0,
+    WATCHDOG_TICKS   = 0,
+    MEMORY_SCANS     = 0,
 }
 
 local DefenseHooks = {
@@ -198,11 +199,11 @@ end
 
 local function DLog(msg)
     if DEBUG_MODE then
-        pcall(function() print("[HOSHI-DEFENSE] " .. tostring(msg)) end)
+        pcall(function() print("[EGG-DEFENSE] " .. tostring(msg)) end)
     end
 end
 
--- Layer 1: Hook __namecall (blocks Kick, Teleport, suspicious remotes)
+-- Layer 1: Hook __namecall
 local function InstallNamecallHook()
     if not getrawmetatable or not setreadonly or not hookmetamethod or not newcclosure then
         return false
@@ -245,7 +246,7 @@ local function InstallNamecallHook()
             if method == "Destroy" then
                 if typeof(self) == "Instance" then
                     if self == CoreGui then return nil end
-                    if self:IsA("ScreenGui") and string_find(self.Name, "Hoshi") then
+                    if self:IsA("ScreenGui") and string_find(self.Name, "EggHub") then
                         return nil
                     end
                 end
@@ -258,7 +259,7 @@ local function InstallNamecallHook()
     return ok
 end
 
--- Layer 2: Hook __index (spoof WalkSpeed/JumpPower reads)
+-- Layer 2: Hook __index (spoof WalkSpeed reads)
 local function InstallIndexHook()
     if not hookmetamethod or not newcclosure then return false end
     local ok = pcall(function()
@@ -278,7 +279,7 @@ local function InstallIndexHook()
     return ok
 end
 
--- Layer 3: Hook __newindex (block external writes)
+-- Layer 3: Hook __newindex
 local function InstallNewIndexHook()
     if not hookmetamethod or not newcclosure then return false end
     local ok = pcall(function()
@@ -310,7 +311,7 @@ local function InstallDirectKickHook()
     return ok
 end
 
--- Layer 5: Direct TeleportService.Teleport hook
+-- Layer 5: Direct Teleport hook
 local function InstallDirectTeleportHook()
     if not hookfunction then return false end
     local ok = pcall(function()
@@ -323,7 +324,7 @@ local function InstallDirectTeleportHook()
     return ok
 end
 
--- Layer 6: Debug hooks (spoof fingerprints)
+-- Layer 6: Debug hooks
 local function InstallDebugHooks()
     if not hookfunction then return false end
     pcall(function()
@@ -331,20 +332,17 @@ local function InstallDebugHooks()
             local oldInfo = hookfunction(debug.info, function(...)
                 local r = oldInfo(...)
                 if type(r) == "string" then
-                    r = string_gsub(r, "Hoshi", "CoreScript")
-                    r = string_gsub(r, "BlackZ", "CoreScript")
+                    r = string_gsub(r, "EggHub", "CoreScript")
                 end
                 return r
             end)
             DefenseHooks.debuginfo = oldInfo
         end
-
         if debug and debug.traceback then
             local oldTrace = hookfunction(debug.traceback, function(...)
                 local r = oldTrace(...)
                 if type(r) == "string" then
-                    r = string_gsub(r, "Hoshi", "CoreScript")
-                    r = string_gsub(r, "BlackZ", "CoreScript")
+                    r = string_gsub(r, "EggHub", "CoreScript")
                 end
                 return r
             end)
@@ -354,7 +352,7 @@ local function InstallDebugHooks()
     return true
 end
 
--- Layer 7: Purge suspicious remotes (GC scan)
+-- Layer 7: Purge suspicious remotes
 local function PurgeSuspiciousRemotes()
     if not getgc then return 0 end
     local killed = 0
@@ -457,7 +455,7 @@ local function ProtectNetworkOwnership()
     return true
 end
 
--- Layer 11: Humanoid.Died protection (remove listeners)
+-- Layer 11: Humanoid.Died protection
 local function ProtectHumanoidDied()
     local function HookHumanoid(hum)
         if not hum or not getconnections then return end
@@ -467,7 +465,6 @@ local function ProtectHumanoidDied()
             end
         end)
     end
-
     if LP.Character then
         HookHumanoid(LP.Character:FindFirstChildOfClass("Humanoid"))
     end
@@ -486,7 +483,6 @@ local function ProtectScriptContext()
                 pcall(function() conn:Disconnect() end)
             end
         end
-        pcall(function() ScriptContext.Error:Connect(function() end) end)
     end)
     return true
 end
@@ -532,7 +528,7 @@ local function StartDefenseWatchdog()
     return true
 end
 
--- Layer 14: Auto-reconnect on disconnect
+-- Layer 14: Auto-Reconnect
 local function StartAutoReconnect()
     task_spawn(function()
         while Defense.ACTIVE do
@@ -548,7 +544,7 @@ local function StartAutoReconnect()
     return true
 end
 
--- Boot defense engine
+-- Boot defense
 local function StartDefenseEngine()
     pcall(InstallNamecallHook)
     pcall(InstallIndexHook)
@@ -564,7 +560,7 @@ local function StartDefenseEngine()
     pcall(ProtectHumanoidDied)
     pcall(StartDefenseWatchdog)
     pcall(StartAutoReconnect)
-    DLog("═══ DEFENSE ENGINE v4.0 KHỞI ĐỘNG ═══")
+    DLog("═══ DEFENSE ENGINE v5.0 KHỞI ĐỘNG ═══")
 end
 
 task_spawn(function()
@@ -580,25 +576,6 @@ local Humanizer = {}
 function Humanizer.RandomDelay(minSec, maxSec)
     task_wait(minSec + math_random() * (maxSec - minSec))
 end
-function Humanizer.TweenTeleport(hrp, targetPos, duration)
-    if not hrp or not hrp.Parent then return nil end
-    duration = duration or (0.12 + math_random() * 0.13)
-    local endCF
-    pcall(function()
-        endCF = CFrame_new(targetPos, targetPos + hrp.CFrame.LookVector)
-    end)
-    if not endCF then return nil end
-    local tween
-    pcall(function()
-        tween = TweenService:Create(
-            hrp,
-            TweenInfo_new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            { CFrame = endCF }
-        )
-        tween:Play()
-    end)
-    return tween
-end
 function Humanizer.Jitter(pos, amount)
     amount = amount or 1.5
     return pos + Vector3_new(
@@ -611,8 +588,8 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 -- [MODULE 07] STATE + ORIGINAL SNAPSHOT
 -- ═══════════════════════════════════════════════════════════════════════════
-if getgenv().HOSHI_STATE and getgenv().HOSHI_STATE.destroy then
-    pcall(getgenv().HOSHI_STATE.destroy)
+if getgenv().EGG_STATE and getgenv().EGG_STATE.destroy then
+    pcall(getgenv().EGG_STATE.destroy)
 end
 
 local State = {
@@ -620,33 +597,41 @@ local State = {
     char = nil, hrp = nil, hum = nil,
     originalWalkSpeed = 16,
 
+    -- Farm
     autoSteal = false,
-    autoPlace = false,
-    autoHatch = false,
-    autoSell = false,
+    farmActive = false,
+    farmSpeed = 180,
+    hoverOffset = 3,
+    scanRadius = 5000,
+    lastSteal = 0,
+    stealCooldown = 0.15,
 
+    -- Remote Fire
     autoFireRemote = false,
     customRemoteNames = {},
     scannedRemotes = {},
     lastFireTime = 0,
     fireInterval = 0.2,
 
+    -- Combat
     esp = false,
-    aimbot = false,
-    aimbotRange = 300,
-    aimbotTarget = "Head",
+    aimbot = false, aimbotRange = 300, aimbotTarget = "Head",
     aimbotSmooth = 0.35,
-    killAura = false,
-    killAuraRange = 25,
+    killAura = false, killAuraRange = 25,
 
-    speedHack = false,
-    speedValue = 100,
-    noclip = false,
-    infiniteJump = false,
+    -- Movement
+    speedHack = false, speedValue = 100,
+    noclip = false, infiniteJump = false,
+    flyEnabled = false, flySpeed = 150,
+    flyUp = false, flyDown = false,
+    flyCurrentVel = Vector3_zero,
+    flyBodyVel = nil, flyBodyGyro = nil,
 
+    -- Visual
     fullbright = false,
     rainbowMode = true,
 
+    -- UI
     uiOpen = true,
     currentTab = "Main",
 }
@@ -746,7 +731,7 @@ end
 -- [MODULE 10] NOTIFICATION SYSTEM
 -- ═══════════════════════════════════════════════════════════════════════════
 local NotifyGui = mk("ScreenGui", nil, {
-    Name = "HoshiNotify",
+    Name = "EggHubNotify",
     ResetOnSpawn = false,
     IgnoreGuiInset = true,
     DisplayOrder = 99999,
@@ -792,7 +777,7 @@ local function Notify(title, text, dur)
             Size = UDim2_new(1, -20, 0, 16),
             Position = UDim2_new(0, 12, 0, 8),
             BackgroundTransparency = 1,
-            Text = title or "Hoshi Hub",
+            Text = title or "Egg Hub",
             Font = Enum.Font.GothamBold,
             TextSize = 11,
             TextColor3 = col,
@@ -913,7 +898,6 @@ function RemoteFire.Scan()
     end
 
     RecursiveScan(ReplicatedStorage, results, seenObjs, 0)
-
     Logger.log("RemoteFire", string_format("Scanned %d remotes", #State.scannedRemotes))
     return #State.scannedRemotes
 end
@@ -934,9 +918,7 @@ function RemoteFire.FireAll()
     for _, r in ipairs(State.scannedRemotes) do
         if r.obj and r.obj.Parent then
             if r.type == "RE" then
-                local ok = pcall(function()
-                    r.obj:FireServer()
-                end)
+                local ok = pcall(function() r.obj:FireServer() end)
                 if ok then count = count + 1 end
             else
                 task_spawn(function()
@@ -950,10 +932,9 @@ function RemoteFire.FireAll()
 end
 
 function RemoteFire.PrintList()
-    print("═══════ [HOSHI] REMOTE LIST ═══════")
+    print("═══════ [EGG] REMOTE LIST ═══════")
     if #State.scannedRemotes == 0 then
         print("  ⚠️  No remote matched filter!")
-        print("  💡 Try adding custom name in Remote tab")
     else
         for i, r in ipairs(State.scannedRemotes) do
             print(string_format("  [%d] %s (%s)", i, r.name, r.type))
@@ -965,7 +946,7 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 -- [MODULE 12] ESP SYSTEM
 -- ═══════════════════════════════════════════════════════════════════════════
-local ESPContainer = mk("Folder", nil, { Name = "HoshiESP" })
+local ESPContainer = mk("Folder", nil, { Name = "EggHubESP" })
 SafeParent(ESPContainer)
 local espObjects = {}
 
@@ -1061,70 +1042,158 @@ Lifecycle.TrackConnection(Players.PlayerRemoving:Connect(function(p)
 end))
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 13] AUTO FARM
+-- [MODULE 13] AUTO FARM — TWEEN BASED (CHỐNG KICK)
 -- ═══════════════════════════════════════════════════════════════════════════
 local EggCache = {
     folderRefs = {},
     lastRescan = 0,
     rescanInterval = 3,
-    lastSteal = 0,
-    stealCooldown = 0.3,
+    currentTween = nil,
 }
 
-local function RescanEggFolders()
-    local now = os_clock()
-    if now - EggCache.lastRescan < EggCache.rescanInterval then return end
-    EggCache.lastRescan = now
-    EggCache.folderRefs = {}
-
-    pcall(function()
-        for _, child in ipairs(Workspace:GetChildren()) do
-            if string_find(string_lower(child.Name), "egg", 1, true) then
-                table_insert(EggCache.folderRefs, child)
+local function GetEggFolder()
+    local possible = { "Eggs", "Map", "Spawned", "Items", "Objects", "World" }
+    for _, name in ipairs(possible) do
+        local folder = Workspace:FindFirstChild(name)
+        if folder then
+            for _, child in ipairs(folder:GetChildren()) do
+                if string_find(string_lower(child.Name), "egg", 1, true)
+                    or child:FindFirstChildWhichIsA("ProximityPrompt", true) then
+                    return folder
+                end
             end
         end
-        if #EggCache.folderRefs == 0 then
-            local common = { "Map", "Spawned", "Items", "Objects", "World", "Eggs" }
-            for _, fname in ipairs(common) do
-                local f = Workspace:FindFirstChild(fname)
-                if f then
-                    for _, child in ipairs(f:GetChildren()) do
-                        if string_find(string_lower(child.Name), "egg", 1, true) then
-                            table_insert(EggCache.folderRefs, child)
+    end
+    return Workspace
+end
+
+local function GetNearestEgg(hrp)
+    local eggFolder = GetEggFolder()
+    local nearestEgg = nil
+    local shortestDist = State.scanRadius
+    local myPos = hrp.Position
+
+    pcall(function()
+        for _, obj in ipairs(eggFolder:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and prompt.Enabled then
+                    local part = prompt.Parent
+                    if part and part:IsA("BasePart") then
+                        local dist = (part.Position - myPos).Magnitude
+                        if dist < shortestDist then
+                            shortestDist = dist
+                            nearestEgg = part
                         end
                     end
                 end
             end
         end
     end)
+
+    return nearestEgg
 end
 
-local function FindNearestEgg(maxDist)
-    if not State.hrp then return nil, math_huge end
-    RescanEggFolders()
-    local myPos = State.hrp.Position
-    local bestEgg, bestDist = nil, maxDist or 500
-
-    for _, folder in ipairs(EggCache.folderRefs) do
-        if folder and folder.Parent then
-            for _, obj in ipairs(folder:GetChildren()) do
-                local primary
-                if obj:IsA("BasePart") then
-                    primary = obj
-                elseif obj:IsA("Model") then
-                    primary = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                end
-                if primary then
-                    local d = (primary.Position - myPos).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestEgg = primary
-                    end
-                end
+local function ClaimEgg(eggPart)
+    if not eggPart or not eggPart.Parent then return false end
+    local success = false
+    pcall(function()
+        local prompt = eggPart:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if prompt and prompt.Enabled then
+            if fireproximityprompt then
+                fireproximityprompt(prompt, 1, true)
+                success = true
+            else
+                prompt:InputHoldBegin()
+                task_wait((prompt.HoldDuration or 0) + 0.1)
+                prompt:InputHoldEnd()
+                success = true
             end
         end
+    end)
+    return success
+end
+
+-- ✅ TWEEN-BASED MOVEMENT (không bị kick)
+local function TweenToEgg(hrp, targetPart)
+    if not hrp or not targetPart or not targetPart.Parent then return end
+
+    local distance = (targetPart.Position - hrp.Position).Magnitude
+    if distance < 5 then return end
+
+    local tweenTime = distance / State.farmSpeed
+    local goalPos = Humanizer.Jitter(
+        targetPart.Position + Vector3_new(0, State.hoverOffset, 0),
+        1
+    )
+
+    if EggCache.currentTween then
+        pcall(function() EggCache.currentTween:Cancel() end)
     end
-    return bestEgg, bestDist
+
+    local tweenInfo = TweenInfo_new(tweenTime, Enum.EasingStyle.Linear)
+    EggCache.currentTween = TweenService:Create(hrp, tweenInfo, {
+        CFrame = CFrame_new(goalPos),
+    })
+    pcall(function() EggCache.currentTween:Play() end)
+
+    -- Đợi tween hoàn thành hoặc đến gần
+    local startTime = os_clock()
+    while os_clock() - startTime < tweenTime + 0.2 do
+        task_wait(0.05)
+        if not targetPart.Parent then break end
+        if not State.farmActive then break end
+        if hrp and (hrp.Position - targetPart.Position).Magnitude <= 8 then
+            if EggCache.currentTween then
+                pcall(function() EggCache.currentTween:Cancel() end)
+            end
+            break
+        end
+    end
+end
+
+local function StartFarm()
+    if State.farmActive then return end
+    State.farmActive = true
+
+    local th = task_spawn(function()
+        while State.farmActive and State.alive do
+            task_wait(0.1)
+            pcall(function()
+                local char = LP.Character
+                if not char then return end
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if not hrp or not hum or hum.Health <= 0 then return end
+
+                hrp.Velocity = Vector3_zero
+                hrp.RotVelocity = Vector3_zero
+
+                local egg = GetNearestEgg(hrp)
+                if egg and egg.Parent then
+                    TweenToEgg(hrp, egg)
+                    task_wait(0.1)
+                    if egg.Parent and (hrp.Position - egg.Position).Magnitude <= 12 then
+                        Humanizer.RandomDelay(0.05, 0.12)
+                        ClaimEgg(egg)
+                        task_wait(0.1)
+                    end
+                else
+                    task_wait(0.5)
+                end
+            end)
+        end
+        Logger.log("Farm", "Farm loop terminated")
+    end)
+    Lifecycle.TrackThread(th)
+end
+
+local function StopFarm()
+    State.farmActive = false
+    if EggCache.currentTween then
+        pcall(function() EggCache.currentTween:Cancel() end)
+        EggCache.currentTween = nil
+    end
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -1133,7 +1202,7 @@ end
 local function FindNearestPlayer(maxRange, targetPart)
     if not State.hrp then return nil, nil end
     local myPos = State.hrp.Position
-    local bestPlayer, bestPart, bestDist = nil, nil, maxRange or 300
+    local bestPart, bestDist = nil, maxRange or 300
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
@@ -1143,13 +1212,12 @@ local function FindNearestPlayer(maxRange, targetPart)
                 local d = (part.Position - myPos).Magnitude
                 if d < bestDist then
                     bestDist = d
-                    bestPlayer = player
                     bestPart = part
                 end
             end
         end
     end
-    return bestPlayer, bestPart, bestDist
+    return nil, bestPart
 end
 
 local function RunAimbot()
@@ -1184,7 +1252,92 @@ local function RunKillAura()
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 15] RAINBOW ENGINE
+-- [MODULE 15] FLY ENGINE
+-- ═══════════════════════════════════════════════════════════════════════════
+local function DestroyFlyParts()
+    if State.flyBodyVel then pcall(function() State.flyBodyVel:Destroy() end); State.flyBodyVel = nil end
+    if State.flyBodyGyro then pcall(function() State.flyBodyGyro:Destroy() end); State.flyBodyGyro = nil end
+end
+
+local function StartFly()
+    if not State.hrp or not State.hum then
+        UpdateChar()
+        if not State.hrp then return end
+    end
+    State.flyEnabled = true
+    State.flyCurrentVel = Vector3_zero
+    DestroyFlyParts()
+    State.flyBodyVel = mk("BodyVelocity", State.hrp, {
+        Name = "EggHub_FlyVel",
+        MaxForce = Vector3_new(1e6, 1e6, 1e6),
+        P = 100000,
+        Velocity = Vector3_zero,
+    })
+    State.flyBodyGyro = mk("BodyGyro", State.hrp, {
+        Name = "EggHub_FlyGyro",
+        MaxTorque = Vector3_new(1e6, 1e6, 1e6),
+        P = 10000,
+        CFrame = State.hrp.CFrame,
+    })
+    pcall(function() State.hum.PlatformStand = true end)
+    Notify("success", "✈️ FLY ON", "Space/LShift để lên/xuống", 2)
+end
+
+local function StopFly()
+    State.flyEnabled = false
+    DestroyFlyParts()
+    pcall(function()
+        if State.hum then State.hum.PlatformStand = false end
+    end)
+    State.flyCurrentVel = Vector3_zero
+    State.flyUp = false
+    State.flyDown = false
+    Notify("warn", "✈️ FLY OFF", "", 2)
+end
+
+local function ToggleFly()
+    if State.flyEnabled then StopFly() else StartFly() end
+end
+
+Lifecycle.TrackConnection(RunService.RenderStepped:Connect(function(dt)
+    if not State.flyEnabled then return end
+    if not State.hrp or not State.hum then return end
+    if State.hum.Health <= 0 then StopFly() return end
+
+    dt = math_min(dt, 0.05)
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+    local look = cam.CFrame.LookVector
+    local right = cam.CFrame.RightVector
+
+    local flatLook = Vector3_new(look.X, 0, look.Z)
+    local flatRight = Vector3_new(right.X, 0, right.Z)
+    if flatLook.Magnitude > 0.01 then flatLook = flatLook.Unit end
+    if flatRight.Magnitude > 0.01 then flatRight = flatRight.Unit end
+
+    local spd = State.flySpeed
+    local target = Vector3_zero
+
+    if State.flyUp then target = target + Vector3_new(0, spd, 0) end
+    if State.flyDown then target = target - Vector3_new(0, spd, 0) end
+
+    local move = State.hum.MoveDirection
+    if move.Magnitude > 0.1 then
+        target = target + (flatLook * move.Z + flatRight * move.X) * spd
+    end
+
+    local alpha = math_clamp(20 * dt, 0, 1)
+    State.flyCurrentVel = State.flyCurrentVel:Lerp(target, alpha)
+    if State.flyCurrentVel.Magnitude < 0.5 then
+        State.flyCurrentVel = Vector3_zero
+    end
+
+    if State.flyBodyVel then State.flyBodyVel.Velocity = State.flyCurrentVel end
+    if State.flyBodyGyro then State.flyBodyGyro.CFrame = cam.CFrame end
+end))
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 16] RAINBOW ENGINE
 -- ═══════════════════════════════════════════════════════════════════════════
 local Rainbow = {}
 Rainbow.__index = Rainbow
@@ -1209,11 +1362,12 @@ end
 local rainbowEngine = Rainbow.new()
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 16] UNLOAD SCRIPT (Full state restore)
+-- [MODULE 17] UNLOAD SCRIPT
 -- ═══════════════════════════════════════════════════════════════════════════
 local function UnloadScript()
     State.alive = false
     Defense.ACTIVE = false
+    StopFarm()
 
     if State.hum then
         pcall(function() State.hum.WalkSpeed = State.originalWalkSpeed or 16 end)
@@ -1237,13 +1391,12 @@ local function UnloadScript()
     pcall(function() if NotifyGui then NotifyGui:Destroy() end end)
 
     Lifecycle.Destroy()
-    pcall(function() getgenv().HOSHI_STATE = nil end)
-
+    pcall(function() getgenv().EGG_STATE = nil end)
     Logger.log("Unload", "Script unloaded cleanly")
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 17] MAIN UI
+-- [MODULE 18] MAIN UI
 -- ═══════════════════════════════════════════════════════════════════════════
 local UI = {}
 local MainGui, Window, Pages, TabBtns, RainbowElements = nil, nil, {}, {}, {}
@@ -1350,7 +1503,7 @@ local function BuildUI()
     Pages, TabBtns, RainbowElements = {}, {}, {}
 
     MainGui = mk("ScreenGui", nil, {
-        Name = "HoshiMain",
+        Name = "EggHubMain",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         DisplayOrder = 99990,
@@ -1387,7 +1540,7 @@ local function BuildUI()
         Size = UDim2_new(1, -100, 1, 0),
         Position = UDim2_new(0, 12, 0, 0),
         BackgroundTransparency = 1,
-        Text = "🌈 HOSHI HUB v4.0",
+        Text = "🥚 EGG HUB v5.0",
         Font = Enum.Font.GothamBlack,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -1563,6 +1716,10 @@ local function BuildUI()
     ql.FillDirectionMaxCells = 2
     ql.Parent = qGrid
 
+    UI.gridToggle(qGrid, "🥚 Auto Steal", false, function(v)
+        State.autoSteal = v
+        if v then StartFarm() else StopFarm() end
+    end)
     UI.gridToggle(qGrid, "👻 Noclip", false, function(v) State.noclip = v end)
     UI.gridToggle(qGrid, "🦘 Inf Jump", false, function(v) State.infiniteJump = v end)
     UI.gridToggle(qGrid, "🔦 Fullbright", false, function(v)
@@ -1575,7 +1732,6 @@ local function BuildUI()
             pcall(function() State.hum.WalkSpeed = State.originalWalkSpeed or 16 end)
         end
     end)
-    UI.gridToggle(qGrid, "🥚 Auto Steal", false, function(v) State.autoSteal = v end)
     UI.gridToggle(qGrid, "📡 Remote Fire", false, function(v)
         State.autoFireRemote = v
         Notify("📡 Remote Fire", v and "Đã bật!" or "Đã tắt", 2)
@@ -1583,7 +1739,7 @@ local function BuildUI()
 
     -- TAB: DEFENSE
     local pDef = Pages.Defense
-    UI.heading(pDef, "🛡️ Anti-Kick Engine v4.0")
+    UI.heading(pDef, "🛡️ Anti-Kick Engine v5.0")
     local defCard = mk("Frame", pDef, {
         Size = UDim2_new(1, 0, 0, 140),
         BackgroundColor3 = Color3_RGB(20, 60, 20),
@@ -1613,7 +1769,7 @@ local function BuildUI()
             task_wait(0.5)
             pcall(function()
                 defLbl.Text = string_format(
-                    "🛡️ DEFENSE v4.0 — HOẠT ĐỘNG\n" ..
+                    "🛡️ DEFENSE v5.0 — HOẠT ĐỘNG\n" ..
                     "━━━━━━━━━━━━━━━━━━\n" ..
                     "🚫 Kick chặn: %d\n" ..
                     "🌀 Teleport chặn: %d\n" ..
@@ -1663,8 +1819,22 @@ local function BuildUI()
 
     -- TAB: FARM
     local pFarm = Pages.Farm
-    UI.heading(pFarm, "🥚 Auto Farm Eggs")
-    UI.gridToggle(pFarm, "🔄 Auto Steal", false, function(v) State.autoSteal = v end)
+    UI.heading(pFarm, "🥚 Auto Farm (Tween Safe Mode)")
+    mk("TextLabel", pFarm, {
+        Size = UDim2_new(1, 0, 0, 30),
+        BackgroundTransparency = 1,
+        Text = "⚡ TweenService — tốc độ an toàn 180 studs/s\n🛡️ Không bị kick như CFrame teleport",
+        TextColor3 = Color3_RGB(80, 255, 120),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+        ZIndex = 12,
+    })
+    UI.gridToggle(pFarm, "🔄 Auto Steal", false, function(v)
+        State.autoSteal = v
+        if v then StartFarm() else StopFarm() end
+    end)
     UI.gridToggle(pFarm, "📦 Auto Place", false, function(v) State.autoPlace = v end)
     UI.gridToggle(pFarm, "🐣 Auto Hatch", false, function(v) State.autoHatch = v end)
     UI.gridToggle(pFarm, "💰 Auto Sell", false, function(v) State.autoSell = v end)
@@ -1748,6 +1918,9 @@ local function BuildUI()
     -- TAB: MOVEMENT
     local pMove = Pages.Movement
     UI.heading(pMove, "🏃 Di chuyển")
+    UI.gridToggle(pMove, "✈️ Fly", false, function(v)
+        if v then StartFly() else StopFly() end
+    end)
     UI.gridToggle(pMove, "⚡ Speed Hack", false, function(v)
         State.speedHack = v
         if not v and State.hum then
@@ -1848,7 +2021,7 @@ local function BuildUI()
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 18] MAIN LOOPS
+-- [MODULE 19] MAIN LOOPS
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SafeLoop(name, interval, fn)
     local th = task_spawn(function()
@@ -1865,26 +2038,6 @@ end
 
 SafeLoop("CharUpdate", 0.5, function() UpdateChar() end)
 SafeLoop("ESPRefresh", 1.5, function() RefreshESP() end)
-
-SafeLoop("AutoSteal", 0.3, function()
-    if not State.autoSteal or not State.hrp then return end
-    local now = os_clock()
-    if now - EggCache.lastSteal < EggCache.stealCooldown then return end
-    local egg, dist = FindNearestEgg(500)
-    if egg and dist and dist < 500 then
-        Humanizer.RandomDelay(0.05, 0.15)
-        local targetPos = Humanizer.Jitter(egg.Position + Vector3_new(0, 5, 0), 2)
-        Humanizer.TweenTeleport(State.hrp, targetPos, 0.15)
-        task_wait(0.2)
-        pcall(function()
-            local prompt = egg:FindFirstChildOfClass("ProximityPrompt")
-            if prompt and fireproximityprompt then
-                fireproximityprompt(prompt)
-            end
-        end)
-        EggCache.lastSteal = os_clock()
-    end
-end)
 
 SafeLoop("AutoFireRemote", 0.1, function()
     if not State.autoFireRemote then return end
@@ -1905,6 +2058,7 @@ SafeLoop("AntiAFK", 60, function()
     end)
 end)
 
+-- Noclip qua Stepped (physics sync)
 Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
     if State.noclip and State.char then
         for _, p in ipairs(State.char:GetDescendants()) do
@@ -1915,6 +2069,7 @@ Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
     end
 end))
 
+-- Speed Hack qua Stepped
 Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
     if State.speedHack and State.hum and State.hum.Health > 0 then
         if State.hum.WalkSpeed ~= State.speedValue then
@@ -1923,12 +2078,14 @@ Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
     end
 end))
 
+-- Aimbot qua RenderStepped
 Lifecycle.TrackConnection(RunService.RenderStepped:Connect(function()
     if State.aimbot then
         RunAimbot()
     end
 end))
 
+-- Infinite Jump
 Lifecycle.TrackConnection(UserInputService.JumpRequest:Connect(function()
     if State.infiniteJump and State.hum then
         pcall(function()
@@ -1937,6 +2094,7 @@ Lifecycle.TrackConnection(UserInputService.JumpRequest:Connect(function()
     end
 end))
 
+-- Hotkeys
 Lifecycle.TrackConnection(UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if UserInputService:GetFocusedTextBox() then return end
@@ -1955,15 +2113,31 @@ Lifecycle.TrackConnection(UserInputService.InputBegan:Connect(function(input, gp
         State.autoFireRemote = false
         State.killAura = false
         State.aimbot = false
+        StopFarm()
         Notify("🚨 PANIC", "Đã tắt tất cả", 2)
+    elseif input.KeyCode == Enum.KeyCode.P then
+        ToggleFly()
+    elseif input.KeyCode == Enum.KeyCode.Space then
+        if State.flyEnabled then State.flyUp = true end
+    elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        if State.flyEnabled then State.flyDown = true end
+    end
+end))
+
+Lifecycle.TrackConnection(UserInputService.InputEnded:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Space then
+        State.flyUp = false
+    elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        State.flyDown = false
     end
 end))
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- [MODULE 19] BOOT SEQUENCE
+-- [MODULE 20] BOOT SEQUENCE
 -- ═══════════════════════════════════════════════════════════════════════════
-getgenv().HOSHI_STATE = {
-    version = "4.0",
+getgenv().EGG_STATE = {
+    version = "5.0",
     destroy = function()
         UnloadScript()
     end,
@@ -1974,21 +2148,21 @@ task_spawn(function()
         BuildUI()
         task_wait(1)
         local n = RemoteFire.Scan()
-        Notify("🌈 HOSHI HUB v4.0", "Load OK | " .. n .. " remote", 5)
+        Notify("🥚 EGG HUB v5.0", "Load OK | " .. n .. " remote", 5)
         Notify("🛡️ Anti-Kick", "Defense Engine ACTIVE", 5)
-        Notify("🎮 Hướng dẫn", "RightShift: Menu | K: Panic", 5)
+        Notify("🎮 Hướng dẫn", "RightShift: Menu | K: Panic | P: Fly", 6)
     end, function(e)
         Logger.err("BOOT", "Failed", e)
     end)
 end)
 
 print("═══════════════════════════════════════════════════════")
-print("⚡ HOSHI HUB v4.0 — ANTI-KICK HARDENED LOADED!")
-print("  🛡️ Defense Engine: 20 layers ACTIVE")
-print("  ✅ UI hidden in gethui()")
+print("⚡ EGG HUB v5.0 — ANTI-KICK HARDENED LOADED!")
+print("  🛡️ Defense Engine: 14 layers ACTIVE")
+print("  ✅ Tween Farm (không bị kick như CFrame)")
+print("  ✅ Noclip via RunService.Stepped")
 print("  ✅ Hook __namecall + Player.Kick + Teleport")
 print("  ✅ Purge AC Remotes/Scripts (GC scan)")
 print("  ✅ Watchdog auto-rehook every 1s")
-print("  📡 Tab 'Remote Fire' → Scan → Bật Auto Fire")
-print("  🎮 RightShift: Menu | K: Panic")
+print("  🎮 RightShift: Menu | K: Panic | P: Fly")
 print("═══════════════════════════════════════════════════════")
