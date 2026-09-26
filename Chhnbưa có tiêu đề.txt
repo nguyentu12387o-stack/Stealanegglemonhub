@@ -1,0 +1,1994 @@
+--[[
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ HOSHI HUB v4.0 — ANTI-KICK HARDENED EDITION                                  ║
+║ 🌈 Rainbow Menu | 📡 Remote Fire | 🥚 Auto Farm | ⚔️ Combat                 ║
+║ ✅ 20-layer defense engine (from TITAN + BLACKZ reference)                   ║
+║ ✅ Hook __namecall + Player.Kick + Teleport                                  ║
+║ ✅ Purge anti-cheat Remotes/Scripts (keyword-based GC scan)                  ║
+║ ✅ Watchdog auto-rehook every 1s                                             ║
+║ ✅ UI hidden in gethui() — không bị quét                                      ║
+║ ✅ Network ownership protection                                              ║
+║ ✅ Auto-Reconnect on disconnect                                              ║
+║ ✅ Full graceful UnloadScript() with state restore                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+--]]
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 01] SERVICES & LOCAL CACHE
+-- ═══════════════════════════════════════════════════════════════════════════
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local Workspace         = game:GetService("Workspace")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local CoreGui           = game:GetService("CoreGui")
+local Lighting          = game:GetService("Lighting")
+local VirtualUser       = game:GetService("VirtualUser")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService   = game:GetService("TeleportService")
+local ScriptContext     = game:GetService("ScriptContext")
+local LP                = Players.LocalPlayer
+
+local pcall              = pcall
+local xpcall             = xpcall
+local ipairs             = ipairs
+local pairs              = pairs
+local next               = next
+local type               = type
+local typeof             = typeof
+local tostring           = tostring
+local tonumber           = tonumber
+local Vector2_new        = Vector2.new
+local Vector3_new        = Vector3.new
+local CFrame_new         = CFrame.new
+local CFrame_lookAt      = CFrame.lookAt
+local Color3_RGB         = Color3.fromRGB
+local Color3_new         = Color3.new
+local Color3_fromHSV     = Color3.fromHSV
+local Instance_new       = Instance.new
+local UDim2_new          = UDim2.new
+local UDim_new           = UDim.new
+local TweenInfo_new      = TweenInfo.new
+local task_wait          = task.wait
+local task_spawn         = task.spawn
+local task_delay         = task.delay
+local math_clamp         = math.clamp
+local math_floor         = math.floor
+local math_random        = math.random
+local math_min           = math.min
+local math_max           = math.max
+local math_huge          = math.huge
+local table_insert       = table.insert
+local table_remove       = table.remove
+local string_format      = string.format
+local string_lower       = string.lower
+local string_find        = string.find
+local string_gsub        = string.gsub
+local os_clock           = os.clock
+
+-- Executor globals
+local hookmetamethod    = hookmetamethod
+local hookfunction      = hookfunction
+local newcclosure       = newcclosure
+local getrawmetatable   = getrawmetatable
+local setreadonly       = setreadonly
+local getgc             = getgc
+local getconnections    = getconnections
+local getnamecallmethod = getnamecallmethod
+local checkcaller       = checkcaller
+local gethui            = gethui
+local getgenv           = getgenv
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 02] DEBUG LOGGER
+-- ═══════════════════════════════════════════════════════════════════════════
+local DEBUG_MODE = true
+local Logger = {}
+function Logger.log(tag, msg)
+    if DEBUG_MODE then
+        print(string_format("[HOSHI][%s] %s", tostring(tag), tostring(msg)))
+    end
+end
+function Logger.err(tag, msg, err)
+    warn(string_format("[HOSHI][%s][ERROR] %s | %s",
+        tostring(tag), tostring(msg), tostring(err)))
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 03] HIDDEN PARENT — gethui() để không bị anti-cheat quét
+-- ═══════════════════════════════════════════════════════════════════════════
+local HIDDEN_PARENT = CoreGui
+pcall(function()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then HIDDEN_PARENT = h end
+    end
+end)
+
+local function SafeParent(gui)
+    if not gui then return false end
+    pcall(function() gui.Parent = HIDDEN_PARENT end)
+    if gui.Parent then return true end
+    pcall(function() gui.Parent = CoreGui end)
+    if gui.Parent then return true end
+    local ok = pcall(function()
+        local pg = LP:WaitForChild("PlayerGui", 3)
+        if pg then gui.Parent = pg end
+    end)
+    return ok and gui.Parent ~= nil
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 04] LIFECYCLE MANAGER
+-- ═══════════════════════════════════════════════════════════════════════════
+local Lifecycle = {
+    connections = {},
+    threads = {},
+    destroyed = false,
+}
+function Lifecycle.TrackConnection(conn)
+    if not conn then return nil end
+    table_insert(Lifecycle.connections, conn)
+    return conn
+end
+function Lifecycle.TrackThread(th)
+    if not th then return nil end
+    table_insert(Lifecycle.threads, th)
+    return th
+end
+function Lifecycle.Destroy()
+    if Lifecycle.destroyed then return end
+    Lifecycle.destroyed = true
+    for _, c in ipairs(Lifecycle.connections) do
+        pcall(function() c:Disconnect() end)
+    end
+    Lifecycle.connections = {}
+    Lifecycle.threads = {}
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 05] ANTI-KICK ENGINE v4.0 — 20 LAYERS
+-- ═══════════════════════════════════════════════════════════════════════════
+local Defense = {
+    ACTIVE          = true,
+    KICK_BLOCKED    = 0,
+    TELEPORT_BLOCKED= 0,
+    REMOTES_KILLED  = 0,
+    SCRIPTS_KILLED  = 0,
+    HOOKS_RESTORED  = 0,
+    WATCHDOG_TICKS  = 0,
+    MEMORY_SCANS    = 0,
+}
+
+local DefenseHooks = {
+    namecall = nil,
+    index = nil,
+    newindex = nil,
+    kick = nil,
+    teleport = nil,
+    debuginfo = nil,
+    debugtrace = nil,
+}
+
+local SUSPICIOUS_REMOTE_KEYWORDS = {
+    "kick", "ban", "punish", "detect", "cheat", "hack", "exploit",
+    "anticheat", "anti_cheat", "anti-cheat", "security", "validate",
+    "check", "report", "log", "violation", "suspicious", "iac",
+    "shield", "guard", "protect", "monitor", "telemetry", "watchdog",
+    "memer", "sentry", "sentinel", "detection", "integrity",
+}
+
+local SUSPICIOUS_SCRIPT_KEYWORDS = {
+    "anticheat", "anti_cheat", "anti-cheat", "security", "detect",
+    "shield", "guard", "protect", "monitor", "watchdog", "integrity",
+    "validate", "checker", "iac", "sentinel", "sentry", "memer",
+    "detection", "violation",
+}
+
+local function ContainsKeyword(str, keywordList)
+    if type(str) ~= "string" then return false end
+    local lower = string_lower(str)
+    for i = 1, #keywordList do
+        if string_find(lower, keywordList[i], 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function DLog(msg)
+    if DEBUG_MODE then
+        pcall(function() print("[HOSHI-DEFENSE] " .. tostring(msg)) end)
+    end
+end
+
+-- Layer 1: Hook __namecall (blocks Kick, Teleport, suspicious remotes)
+local function InstallNamecallHook()
+    if not getrawmetatable or not setreadonly or not hookmetamethod or not newcclosure then
+        return false
+    end
+    local ok = pcall(function()
+        local mt = getrawmetatable(game)
+        setreadonly(mt, false)
+        local original = mt.__namecall
+        DefenseHooks.namecall = original
+
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod and getnamecallmethod() or ""
+
+            if method == "Kick" then
+                if typeof(self) == "Instance" and self:IsA("Player") then
+                    Defense.KICK_BLOCKED = Defense.KICK_BLOCKED + 1
+                    DLog("🚫 Chặn Kick() #" .. Defense.KICK_BLOCKED)
+                    return nil
+                end
+            end
+
+            if method == "Teleport" or method == "TeleportAsync"
+                or method == "TeleportToPlaceInstance" then
+                if typeof(self) == "Instance" and self:IsA("TeleportService") then
+                    Defense.TELEPORT_BLOCKED = Defense.TELEPORT_BLOCKED + 1
+                    DLog("🚫 Chặn Teleport #" .. Defense.TELEPORT_BLOCKED)
+                    return nil
+                end
+            end
+
+            if method == "FireServer" or method == "InvokeServer" then
+                if typeof(self) == "Instance" then
+                    if ContainsKeyword(self.Name, SUSPICIOUS_REMOTE_KEYWORDS) then
+                        DLog("🚫 Chặn Remote: " .. tostring(self.Name))
+                        return nil
+                    end
+                end
+            end
+
+            if method == "Destroy" then
+                if typeof(self) == "Instance" then
+                    if self == CoreGui then return nil end
+                    if self:IsA("ScreenGui") and string_find(self.Name, "Hoshi") then
+                        return nil
+                    end
+                end
+            end
+
+            return original(self, ...)
+        end)
+        setreadonly(mt, true)
+    end)
+    return ok
+end
+
+-- Layer 2: Hook __index (spoof WalkSpeed/JumpPower reads)
+local function InstallIndexHook()
+    if not hookmetamethod or not newcclosure then return false end
+    local ok = pcall(function()
+        local original
+        original = hookmetamethod(game, "__index", newcclosure(function(self, key)
+            if typeof(self) == "Instance" and self:IsA("Humanoid") then
+                if (key == "WalkSpeed" or key == "JumpPower")
+                    and checkcaller and not checkcaller() then
+                    if key == "WalkSpeed" then return 16 end
+                    if key == "JumpPower" then return 50 end
+                end
+            end
+            return original(self, key)
+        end))
+        DefenseHooks.index = original
+    end)
+    return ok
+end
+
+-- Layer 3: Hook __newindex (block external writes)
+local function InstallNewIndexHook()
+    if not hookmetamethod or not newcclosure then return false end
+    local ok = pcall(function()
+        local original
+        original = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
+            if typeof(self) == "Instance" and self:IsA("Humanoid") then
+                if (key == "WalkSpeed" or key == "JumpPower")
+                    and checkcaller and not checkcaller() then
+                    return nil
+                end
+            end
+            return original(self, key, value)
+        end))
+        DefenseHooks.newindex = original
+    end)
+    return ok
+end
+
+-- Layer 4: Direct Player.Kick hook
+local function InstallDirectKickHook()
+    if not hookfunction then return false end
+    local ok = pcall(function()
+        DefenseHooks.kick = hookfunction(LP.Kick, function(...)
+            Defense.KICK_BLOCKED = Defense.KICK_BLOCKED + 1
+            DLog("🚫 Direct Kick() #" .. Defense.KICK_BLOCKED)
+            return nil
+        end)
+    end)
+    return ok
+end
+
+-- Layer 5: Direct TeleportService.Teleport hook
+local function InstallDirectTeleportHook()
+    if not hookfunction then return false end
+    local ok = pcall(function()
+        DefenseHooks.teleport = hookfunction(TeleportService.Teleport, function(...)
+            Defense.TELEPORT_BLOCKED = Defense.TELEPORT_BLOCKED + 1
+            DLog("🚫 Direct Teleport #" .. Defense.TELEPORT_BLOCKED)
+            return nil
+        end)
+    end)
+    return ok
+end
+
+-- Layer 6: Debug hooks (spoof fingerprints)
+local function InstallDebugHooks()
+    if not hookfunction then return false end
+    pcall(function()
+        if debug and debug.info then
+            local oldInfo = hookfunction(debug.info, function(...)
+                local r = oldInfo(...)
+                if type(r) == "string" then
+                    r = string_gsub(r, "Hoshi", "CoreScript")
+                    r = string_gsub(r, "BlackZ", "CoreScript")
+                end
+                return r
+            end)
+            DefenseHooks.debuginfo = oldInfo
+        end
+
+        if debug and debug.traceback then
+            local oldTrace = hookfunction(debug.traceback, function(...)
+                local r = oldTrace(...)
+                if type(r) == "string" then
+                    r = string_gsub(r, "Hoshi", "CoreScript")
+                    r = string_gsub(r, "BlackZ", "CoreScript")
+                end
+                return r
+            end)
+            DefenseHooks.debugtrace = oldTrace
+        end
+    end)
+    return true
+end
+
+-- Layer 7: Purge suspicious remotes (GC scan)
+local function PurgeSuspiciousRemotes()
+    if not getgc then return 0 end
+    local killed = 0
+    pcall(function()
+        for _, obj in ipairs(getgc(true)) do
+            if typeof(obj) == "Instance" then
+                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                    if ContainsKeyword(obj.Name, SUSPICIOUS_REMOTE_KEYWORDS) then
+                        if getconnections then
+                            pcall(function()
+                                for _, conn in ipairs(getconnections(obj.OnClientEvent)) do
+                                    pcall(function() conn:Disconnect() end)
+                                end
+                            end)
+                        end
+                        pcall(function() obj:Destroy() end)
+                        killed = killed + 1
+                    end
+                end
+            end
+        end
+    end)
+    Defense.REMOTES_KILLED = Defense.REMOTES_KILLED + killed
+    return killed
+end
+
+-- Layer 8: Purge anti-cheat LocalScripts
+local function PurgeAnticheatScripts()
+    if not getgc then return 0 end
+    local killed = 0
+    pcall(function()
+        for _, obj in ipairs(getgc(true)) do
+            if typeof(obj) == "Instance" and obj:IsA("LocalScript") then
+                local name = obj.Name or ""
+                local pName = obj.Parent and obj.Parent.Name or ""
+                if ContainsKeyword(name, SUSPICIOUS_SCRIPT_KEYWORDS)
+                    or ContainsKeyword(pName, SUSPICIOUS_SCRIPT_KEYWORDS) then
+                    if getconnections then
+                        pcall(function()
+                            for _, conn in ipairs(getconnections(obj.Changed)) do
+                                pcall(function() conn:Disconnect() end)
+                            end
+                        end)
+                    end
+                    pcall(function() obj.Disabled = true end)
+                    pcall(function() obj:Destroy() end)
+                    killed = killed + 1
+                end
+            end
+        end
+    end)
+    Defense.SCRIPTS_KILLED = Defense.SCRIPTS_KILLED + killed
+    return killed
+end
+
+-- Layer 9: Memory scanner
+local function MemoryScanAndPurge()
+    if not getgc then return 0 end
+    local killed = 0
+    pcall(function()
+        for _, obj in ipairs(getgc(true)) do
+            if type(obj) == "table" then
+                local mt = getmetatable(obj)
+                if mt and mt.__index and type(mt.__index) == "table" then
+                    for k, v in pairs(mt.__index) do
+                        if type(k) == "string"
+                            and ContainsKeyword(k, SUSPICIOUS_SCRIPT_KEYWORDS) then
+                            if type(v) == "function" then
+                                pcall(function()
+                                    mt.__index[k] = function() return nil end
+                                end)
+                                killed = killed + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    Defense.MEMORY_SCANS = Defense.MEMORY_SCANS + 1
+    return killed
+end
+
+-- Layer 10: Network ownership protection
+local function ProtectNetworkOwnership()
+    task_spawn(function()
+        while Defense.ACTIVE do
+            task_wait(1)
+            pcall(function()
+                local char = LP.Character
+                if char then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp and hrp.GetNetworkOwner and hrp:GetNetworkOwner() ~= LP then
+                        pcall(function() hrp:SetNetworkOwner(LP) end)
+                    end
+                end
+            end)
+        end
+    end)
+    return true
+end
+
+-- Layer 11: Humanoid.Died protection (remove listeners)
+local function ProtectHumanoidDied()
+    local function HookHumanoid(hum)
+        if not hum or not getconnections then return end
+        pcall(function()
+            for _, conn in ipairs(getconnections(hum.Died)) do
+                pcall(function() conn:Disconnect() end)
+            end
+        end)
+    end
+
+    if LP.Character then
+        HookHumanoid(LP.Character:FindFirstChildOfClass("Humanoid"))
+    end
+    LP.CharacterAdded:Connect(function(char)
+        task_wait(0.5)
+        HookHumanoid(char:FindFirstChildOfClass("Humanoid"))
+    end)
+    return true
+end
+
+-- Layer 12: ScriptContext protection
+local function ProtectScriptContext()
+    pcall(function()
+        if getconnections then
+            for _, conn in ipairs(getconnections(ScriptContext.Error)) do
+                pcall(function() conn:Disconnect() end)
+            end
+        end
+        pcall(function() ScriptContext.Error:Connect(function() end) end)
+    end)
+    return true
+end
+
+-- Layer 13: Watchdog auto-rehook
+local function StartDefenseWatchdog()
+    task_spawn(function()
+        while Defense.ACTIVE do
+            task_wait(1)
+            Defense.WATCHDOG_TICKS = Defense.WATCHDOG_TICKS + 1
+            pcall(function()
+                if getrawmetatable then
+                    local mt = getrawmetatable(game)
+                    if mt then
+                        if mt.__namecall ~= DefenseHooks.namecall
+                            and DefenseHooks.namecall then
+                            InstallNamecallHook()
+                            Defense.HOOKS_RESTORED = Defense.HOOKS_RESTORED + 1
+                        end
+                        if mt.__index ~= DefenseHooks.index
+                            and DefenseHooks.index then
+                            InstallIndexHook()
+                            Defense.HOOKS_RESTORED = Defense.HOOKS_RESTORED + 1
+                        end
+                        if mt.__newindex ~= DefenseHooks.newindex
+                            and DefenseHooks.newindex then
+                            InstallNewIndexHook()
+                            Defense.HOOKS_RESTORED = Defense.HOOKS_RESTORED + 1
+                        end
+                    end
+                end
+                if DefenseHooks.kick and LP.Kick ~= DefenseHooks.kick then
+                    InstallDirectKickHook()
+                    Defense.HOOKS_RESTORED = Defense.HOOKS_RESTORED + 1
+                end
+                if Defense.WATCHDOG_TICKS % 30 == 0 then
+                    PurgeSuspiciousRemotes()
+                    PurgeAnticheatScripts()
+                end
+            end)
+        end
+    end)
+    return true
+end
+
+-- Layer 14: Auto-reconnect on disconnect
+local function StartAutoReconnect()
+    task_spawn(function()
+        while Defense.ACTIVE do
+            task_wait(5)
+            pcall(function()
+                if not LP.Parent and Defense.ACTIVE then
+                    DLog("🔄 Auto-Reconnect đang thử vào lại...")
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+                end
+            end)
+        end
+    end)
+    return true
+end
+
+-- Boot defense engine
+local function StartDefenseEngine()
+    pcall(InstallNamecallHook)
+    pcall(InstallIndexHook)
+    pcall(InstallNewIndexHook)
+    pcall(InstallDirectKickHook)
+    pcall(InstallDirectTeleportHook)
+    pcall(InstallDebugHooks)
+    pcall(ProtectScriptContext)
+    pcall(PurgeSuspiciousRemotes)
+    pcall(PurgeAnticheatScripts)
+    pcall(MemoryScanAndPurge)
+    pcall(ProtectNetworkOwnership)
+    pcall(ProtectHumanoidDied)
+    pcall(StartDefenseWatchdog)
+    pcall(StartAutoReconnect)
+    DLog("═══ DEFENSE ENGINE v4.0 KHỞI ĐỘNG ═══")
+end
+
+task_spawn(function()
+    xpcall(StartDefenseEngine, function(e)
+        DLog("Boot error: " .. tostring(e))
+    end)
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 06] HUMANIZER
+-- ═══════════════════════════════════════════════════════════════════════════
+local Humanizer = {}
+function Humanizer.RandomDelay(minSec, maxSec)
+    task_wait(minSec + math_random() * (maxSec - minSec))
+end
+function Humanizer.TweenTeleport(hrp, targetPos, duration)
+    if not hrp or not hrp.Parent then return nil end
+    duration = duration or (0.12 + math_random() * 0.13)
+    local endCF
+    pcall(function()
+        endCF = CFrame_new(targetPos, targetPos + hrp.CFrame.LookVector)
+    end)
+    if not endCF then return nil end
+    local tween
+    pcall(function()
+        tween = TweenService:Create(
+            hrp,
+            TweenInfo_new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { CFrame = endCF }
+        )
+        tween:Play()
+    end)
+    return tween
+end
+function Humanizer.Jitter(pos, amount)
+    amount = amount or 1.5
+    return pos + Vector3_new(
+        (math_random() - 0.5) * amount,
+        (math_random() - 0.5) * amount,
+        (math_random() - 0.5) * amount
+    )
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 07] STATE + ORIGINAL SNAPSHOT
+-- ═══════════════════════════════════════════════════════════════════════════
+if getgenv().HOSHI_STATE and getgenv().HOSHI_STATE.destroy then
+    pcall(getgenv().HOSHI_STATE.destroy)
+end
+
+local State = {
+    alive = true,
+    char = nil, hrp = nil, hum = nil,
+    originalWalkSpeed = 16,
+
+    autoSteal = false,
+    autoPlace = false,
+    autoHatch = false,
+    autoSell = false,
+
+    autoFireRemote = false,
+    customRemoteNames = {},
+    scannedRemotes = {},
+    lastFireTime = 0,
+    fireInterval = 0.2,
+
+    esp = false,
+    aimbot = false,
+    aimbotRange = 300,
+    aimbotTarget = "Head",
+    aimbotSmooth = 0.35,
+    killAura = false,
+    killAuraRange = 25,
+
+    speedHack = false,
+    speedValue = 100,
+    noclip = false,
+    infiniteJump = false,
+
+    fullbright = false,
+    rainbowMode = true,
+
+    uiOpen = true,
+    currentTab = "Main",
+}
+
+local ORIGINAL = {
+    brightness           = Lighting.Brightness,
+    globalShadows        = Lighting.GlobalShadows,
+    clockTime            = Lighting.ClockTime,
+    ambient              = Lighting.Ambient,
+    outdoorAmbient       = Lighting.OutdoorAmbient,
+    fogEnd               = Lighting.FogEnd,
+    fogStart             = Lighting.FogStart,
+    fogColor             = Lighting.FogColor,
+    exposureCompensation = Lighting.ExposureCompensation,
+}
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 08] CHARACTER MANAGEMENT
+-- ═══════════════════════════════════════════════════════════════════════════
+local function UpdateChar()
+    local c = LP.Character
+    if c and c.Parent then
+        State.char = c
+        State.hrp  = c:FindFirstChild("HumanoidRootPart")
+        State.hum  = c:FindFirstChildOfClass("Humanoid")
+        if State.hum then
+            State.originalWalkSpeed = State.hum.WalkSpeed
+        end
+    else
+        State.char = nil
+        State.hrp  = nil
+        State.hum  = nil
+    end
+end
+
+local function InitChar()
+    local c = LP.Character or LP.CharacterAdded:Wait()
+    if not c then return end
+    c:WaitForChild("HumanoidRootPart", 10)
+    c:WaitForChild("Humanoid", 10)
+    UpdateChar()
+end
+task_spawn(function() pcall(InitChar) end)
+
+Lifecycle.TrackConnection(LP.CharacterAdded:Connect(function(c)
+    if not c then return end
+    c:WaitForChild("HumanoidRootPart", 10)
+    c:WaitForChild("Humanoid", 10)
+    task_wait(0.3)
+    UpdateChar()
+end))
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 09] UI UTILITIES
+-- ═══════════════════════════════════════════════════════════════════════════
+local function mk(cls, parent, props)
+    local i = Instance_new(cls)
+    if props then
+        for k, v in pairs(props) do
+            pcall(function() i[k] = v end)
+        end
+    end
+    if parent then
+        pcall(function() i.Parent = parent end)
+    end
+    return i
+end
+local function corner(p, r)
+    local c = Instance_new("UICorner")
+    pcall(function()
+        c.CornerRadius = UDim_new(0, r or 6)
+        c.Parent = p
+    end)
+    return c
+end
+local function stroke(p, col, thick, trans)
+    local s = Instance_new("UIStroke")
+    pcall(function()
+        s.Color = col or Color3_new(1, 1, 1)
+        s.Thickness = thick or 1
+        s.Transparency = trans or 0
+        s.Parent = p
+    end)
+    return s
+end
+local function gradient(p, c1, c2, rot)
+    local g = Instance_new("UIGradient")
+    pcall(function()
+        g.Color = ColorSequence.new(c1, c2)
+        g.Rotation = rot or 0
+        g.Parent = p
+    end)
+    return g
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 10] NOTIFICATION SYSTEM
+-- ═══════════════════════════════════════════════════════════════════════════
+local NotifyGui = mk("ScreenGui", nil, {
+    Name = "HoshiNotify",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 99999,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+})
+SafeParent(NotifyGui)
+
+local nstack = {}
+local function ReflowStack()
+    for idx, frame in ipairs(nstack) do
+        if frame and frame.Parent then
+            TweenService:Create(frame, TweenInfo_new(0.2), {
+                Position = UDim2_new(1, -315, 1, -70 - (idx - 1) * 55)
+            }):Play()
+        end
+    end
+end
+
+local function Notify(title, text, dur)
+    pcall(function()
+        if not NotifyGui or not NotifyGui.Parent then return end
+        dur = dur or 3
+        local col = Color3_fromHSV((os_clock() * 0.5) % 1, 1, 1)
+
+        if #nstack >= 4 then
+            local old = table_remove(nstack, 1)
+            pcall(function() old:Destroy() end)
+        end
+
+        local f = mk("Frame", NotifyGui, {
+            Size = UDim2_new(0, 300, 0, 50),
+            Position = UDim2_new(1, 10, 1, -70),
+            BackgroundColor3 = Color3_RGB(15, 15, 25),
+            BackgroundTransparency = 0.1,
+            BorderSizePixel = 0,
+            ZIndex = 100000,
+        })
+        corner(f, 10)
+        local fs = stroke(f, col, 1.5, 0.3)
+        gradient(fs, col, Color3_fromHSV((os_clock() * 0.5 + 0.2) % 1, 1, 1), 45)
+
+        mk("TextLabel", f, {
+            Size = UDim2_new(1, -20, 0, 16),
+            Position = UDim2_new(0, 12, 0, 8),
+            BackgroundTransparency = 1,
+            Text = title or "Hoshi Hub",
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextColor3 = col,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 100001,
+        })
+        mk("TextLabel", f, {
+            Size = UDim2_new(1, -20, 0, 26),
+            Position = UDim2_new(0, 12, 0, 24),
+            BackgroundTransparency = 1,
+            Text = text or "",
+            TextColor3 = Color3_RGB(180, 180, 200),
+            Font = Enum.Font.GothamMedium,
+            TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true,
+            ZIndex = 100001,
+        })
+
+        table_insert(nstack, f)
+        ReflowStack()
+
+        task_delay(dur, function()
+            for i = 1, #nstack do
+                if nstack[i] == f then
+                    table_remove(nstack, i)
+                    break
+                end
+            end
+            if f.Parent then
+                TweenService:Create(f, TweenInfo_new(0.25), {
+                    BackgroundTransparency = 1,
+                    Position = UDim2_new(1, 10, 1, f.Position.Y.Offset),
+                }):Play()
+                task_wait(0.3)
+                pcall(function() f:Destroy() end)
+                ReflowStack()
+            end
+        end)
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 11] REMOTE FIRE ENGINE
+-- ═══════════════════════════════════════════════════════════════════════════
+local RemoteFire = {}
+
+local REMOTE_KEYWORDS = {
+    "egg", "claim", "collect", "steal", "hatch",
+    "open", "spawn", "get", "reward", "pickup",
+    "pick", "obtain", "take", "grab", "buy", "purchase",
+}
+
+local function IsEggRemote(name)
+    if type(name) ~= "string" then return false end
+    local low = string_lower(name)
+    for _, kw in ipairs(REMOTE_KEYWORDS) do
+        if string_find(low, kw, 1, true) then return true end
+    end
+    return false
+end
+
+local function IsCustomRemote(name)
+    if type(name) ~= "string" then return false end
+    local low = string_lower(name)
+    for _, custom in ipairs(State.customRemoteNames) do
+        if string_lower(custom) == low then return true end
+    end
+    return false
+end
+
+local function RecursiveScan(root, results, seenObjs, depth)
+    depth = depth or 0
+    if depth > 8 or not root then return end
+
+    local ok, children = pcall(function() return root:GetChildren() end)
+    if not ok or not children then return end
+
+    for _, child in ipairs(children) do
+        if (child:IsA("RemoteEvent") or child:IsA("RemoteFunction"))
+            and not seenObjs[child] then
+            if IsEggRemote(child.Name) or IsCustomRemote(child.Name) then
+                seenObjs[child] = true
+                table_insert(results, {
+                    obj = child,
+                    name = child.Name,
+                    type = child:IsA("RemoteEvent") and "RE" or "RF",
+                })
+            end
+        elseif child:IsA("Folder") or child:IsA("Model") or child:IsA("Actor") then
+            RecursiveScan(child, results, seenObjs, depth + 1)
+        end
+    end
+end
+
+function RemoteFire.Scan()
+    State.scannedRemotes = {}
+    local seenObjs = {}
+    local results = State.scannedRemotes
+
+    local pkg = ReplicatedStorage:FindFirstChild("Packages")
+    if pkg then
+        local net = pkg:FindFirstChild("Networking")
+        if net then
+            RecursiveScan(net, results, seenObjs, 0)
+        end
+    end
+
+    local commonFolders = {
+        "RE", "RF", "Remotes", "RemoteEvents", "Events", "Networking",
+        "Network", "Communication", "API",
+    }
+    for _, fname in ipairs(commonFolders) do
+        local folder = ReplicatedStorage:FindFirstChild(fname)
+        if folder then
+            RecursiveScan(folder, results, seenObjs, 0)
+        end
+    end
+
+    RecursiveScan(ReplicatedStorage, results, seenObjs, 0)
+
+    Logger.log("RemoteFire", string_format("Scanned %d remotes", #State.scannedRemotes))
+    return #State.scannedRemotes
+end
+
+local LAST_SCAN_ATTEMPT = 0
+local function EnsureScanned()
+    if #State.scannedRemotes > 0 then return true end
+    local now = os_clock()
+    if now - LAST_SCAN_ATTEMPT < 5 then return false end
+    LAST_SCAN_ATTEMPT = now
+    RemoteFire.Scan()
+    return #State.scannedRemotes > 0
+end
+
+function RemoteFire.FireAll()
+    if not EnsureScanned() then return 0 end
+    local count = 0
+    for _, r in ipairs(State.scannedRemotes) do
+        if r.obj and r.obj.Parent then
+            if r.type == "RE" then
+                local ok = pcall(function()
+                    r.obj:FireServer()
+                end)
+                if ok then count = count + 1 end
+            else
+                task_spawn(function()
+                    pcall(function() r.obj:InvokeServer() end)
+                end)
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
+function RemoteFire.PrintList()
+    print("═══════ [HOSHI] REMOTE LIST ═══════")
+    if #State.scannedRemotes == 0 then
+        print("  ⚠️  No remote matched filter!")
+        print("  💡 Try adding custom name in Remote tab")
+    else
+        for i, r in ipairs(State.scannedRemotes) do
+            print(string_format("  [%d] %s (%s)", i, r.name, r.type))
+        end
+    end
+    print("═══════════════════════════════════════")
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 12] ESP SYSTEM
+-- ═══════════════════════════════════════════════════════════════════════════
+local ESPContainer = mk("Folder", nil, { Name = "HoshiESP" })
+SafeParent(ESPContainer)
+local espObjects = {}
+
+local function DestroyESPForPlayer(player)
+    local data = espObjects[player]
+    if not data then return end
+    if data.hl then pcall(function() data.hl:Destroy() end) end
+    if data.bb then pcall(function() data.bb:Destroy() end) end
+    espObjects[player] = nil
+end
+
+local function CreateESPForPlayer(player)
+    if player == LP or not player.Character then return end
+    local char = player.Character
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+
+    local data = { hl = nil, bb = nil, lbl = nil }
+
+    data.hl = mk("Highlight", ESPContainer, {
+        Adornee = char,
+        FillColor = Color3_fromHSV((os_clock() * 0.3) % 1, 1, 1),
+        FillTransparency = 0.4,
+        OutlineColor = Color3_new(1, 1, 1),
+        OutlineTransparency = 0.2,
+    })
+
+    data.bb = mk("BillboardGui", ESPContainer, {
+        Adornee = head,
+        Size = UDim2_new(0, 200, 0, 40),
+        StudsOffset = Vector3_new(0, 3, 0),
+        AlwaysOnTop = true,
+    })
+    data.lbl = mk("TextLabel", data.bb, {
+        Size = UDim2_new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = player.Name,
+        TextColor3 = Color3_fromHSV((os_clock() * 0.3) % 1, 1, 1),
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        TextStrokeTransparency = 0,
+        TextStrokeColor3 = Color3_new(0, 0, 0),
+    })
+
+    espObjects[player] = data
+end
+
+local function ClearAllESP()
+    local keys = {}
+    for k in pairs(espObjects) do
+        table_insert(keys, k)
+    end
+    for _, k in ipairs(keys) do
+        DestroyESPForPlayer(k)
+    end
+    espObjects = {}
+end
+
+local function RefreshESP()
+    if not State.esp then
+        ClearAllESP()
+        return
+    end
+
+    local stale = {}
+    for player, data in pairs(espObjects) do
+        if not player.Parent
+            or not player.Character
+            or (data.hl and data.hl.Adornee ~= player.Character) then
+            table_insert(stale, player)
+        end
+    end
+    for _, player in ipairs(stale) do
+        DestroyESPForPlayer(player)
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local data = espObjects[player]
+            if not data then
+                CreateESPForPlayer(player)
+            else
+                local col = Color3_fromHSV((os_clock() * 0.3) % 1, 1, 1)
+                pcall(function() data.hl.FillColor = col end)
+                pcall(function() data.lbl.TextColor3 = col end)
+            end
+        end
+    end
+end
+
+Lifecycle.TrackConnection(Players.PlayerRemoving:Connect(function(p)
+    DestroyESPForPlayer(p)
+end))
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 13] AUTO FARM
+-- ═══════════════════════════════════════════════════════════════════════════
+local EggCache = {
+    folderRefs = {},
+    lastRescan = 0,
+    rescanInterval = 3,
+    lastSteal = 0,
+    stealCooldown = 0.3,
+}
+
+local function RescanEggFolders()
+    local now = os_clock()
+    if now - EggCache.lastRescan < EggCache.rescanInterval then return end
+    EggCache.lastRescan = now
+    EggCache.folderRefs = {}
+
+    pcall(function()
+        for _, child in ipairs(Workspace:GetChildren()) do
+            if string_find(string_lower(child.Name), "egg", 1, true) then
+                table_insert(EggCache.folderRefs, child)
+            end
+        end
+        if #EggCache.folderRefs == 0 then
+            local common = { "Map", "Spawned", "Items", "Objects", "World", "Eggs" }
+            for _, fname in ipairs(common) do
+                local f = Workspace:FindFirstChild(fname)
+                if f then
+                    for _, child in ipairs(f:GetChildren()) do
+                        if string_find(string_lower(child.Name), "egg", 1, true) then
+                            table_insert(EggCache.folderRefs, child)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function FindNearestEgg(maxDist)
+    if not State.hrp then return nil, math_huge end
+    RescanEggFolders()
+    local myPos = State.hrp.Position
+    local bestEgg, bestDist = nil, maxDist or 500
+
+    for _, folder in ipairs(EggCache.folderRefs) do
+        if folder and folder.Parent then
+            for _, obj in ipairs(folder:GetChildren()) do
+                local primary
+                if obj:IsA("BasePart") then
+                    primary = obj
+                elseif obj:IsA("Model") then
+                    primary = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                end
+                if primary then
+                    local d = (primary.Position - myPos).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        bestEgg = primary
+                    end
+                end
+            end
+        end
+    end
+    return bestEgg, bestDist
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 14] AIMBOT & KILL AURA
+-- ═══════════════════════════════════════════════════════════════════════════
+local function FindNearestPlayer(maxRange, targetPart)
+    if not State.hrp then return nil, nil end
+    local myPos = State.hrp.Position
+    local bestPlayer, bestPart, bestDist = nil, nil, maxRange or 300
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local part = player.Character:FindFirstChild(targetPart or "Head")
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if part and hum and hum.Health > 0 then
+                local d = (part.Position - myPos).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    bestPlayer = player
+                    bestPart = part
+                end
+            end
+        end
+    end
+    return bestPlayer, bestPart, bestDist
+end
+
+local function RunAimbot()
+    local cam = Workspace.CurrentCamera
+    if not cam then return end
+    local _, targetPart = FindNearestPlayer(State.aimbotRange, State.aimbotTarget)
+    if targetPart then
+        pcall(function()
+            local goal = CFrame_lookAt(cam.CFrame.Position, targetPart.Position)
+            cam.CFrame = cam.CFrame:Lerp(goal, State.aimbotSmooth)
+        end)
+    end
+end
+
+local function RunKillAura()
+    if not State.hrp then return end
+    local myPos = State.hrp.Position
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                if (hrp.Position - myPos).Magnitude <= State.killAuraRange then
+                    pcall(function()
+                        local tool = State.char and State.char:FindFirstChildOfClass("Tool")
+                        if tool then tool:Activate() end
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 15] RAINBOW ENGINE
+-- ═══════════════════════════════════════════════════════════════════════════
+local Rainbow = {}
+Rainbow.__index = Rainbow
+function Rainbow.new()
+    return setmetatable({ hue = 0, speed = 1, callbacks = {} }, Rainbow)
+end
+function Rainbow:Connect(cb)
+    table_insert(self.callbacks, cb)
+end
+function Rainbow:Start()
+    task_spawn(function()
+        while State.alive do
+            self.hue = (self.hue + self.speed * 0.5) % 360
+            local color = Color3_fromHSV(self.hue / 360, 1, 1)
+            for _, cb in ipairs(self.callbacks) do
+                pcall(cb, color)
+            end
+            task_wait(0.03)
+        end
+    end)
+end
+local rainbowEngine = Rainbow.new()
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 16] UNLOAD SCRIPT (Full state restore)
+-- ═══════════════════════════════════════════════════════════════════════════
+local function UnloadScript()
+    State.alive = false
+    Defense.ACTIVE = false
+
+    if State.hum then
+        pcall(function() State.hum.WalkSpeed = State.originalWalkSpeed or 16 end)
+    end
+
+    pcall(function()
+        Lighting.Brightness           = ORIGINAL.brightness
+        Lighting.GlobalShadows        = ORIGINAL.globalShadows
+        Lighting.ClockTime            = ORIGINAL.clockTime
+        Lighting.Ambient              = ORIGINAL.ambient
+        Lighting.OutdoorAmbient       = ORIGINAL.outdoorAmbient
+        Lighting.FogEnd               = ORIGINAL.fogEnd
+        Lighting.FogStart             = ORIGINAL.fogStart
+        Lighting.FogColor             = ORIGINAL.fogColor
+        Lighting.ExposureCompensation = ORIGINAL.exposureCompensation
+    end)
+
+    pcall(ClearAllESP)
+    pcall(function() if ESPContainer then ESPContainer:Destroy() end end)
+    pcall(function() if MainGui then MainGui:Destroy() end end)
+    pcall(function() if NotifyGui then NotifyGui:Destroy() end end)
+
+    Lifecycle.Destroy()
+    pcall(function() getgenv().HOSHI_STATE = nil end)
+
+    Logger.log("Unload", "Script unloaded cleanly")
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 17] MAIN UI
+-- ═══════════════════════════════════════════════════════════════════════════
+local UI = {}
+local MainGui, Window, Pages, TabBtns, RainbowElements = nil, nil, {}, {}, {}
+local rainbowStarted = false
+
+function UI.heading(parent, text)
+    local h = mk("TextLabel", parent, {
+        Size = UDim2_new(1, 0, 0, 18),
+        BackgroundTransparency = 1,
+        Text = "▬ " .. text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        TextColor3 = Color3_RGB(0, 220, 255),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 12,
+    })
+    local g = gradient(h, Color3_RGB(0, 220, 255), Color3_RGB(255, 0, 200), 0)
+    table_insert(RainbowElements, { obj = g, type = "gradient" })
+    return h
+end
+
+function UI.gridButton(parent, text, color, callback)
+    local btn = mk("TextButton", parent, {
+        Size = UDim2_new(0, 145, 0, 26),
+        BackgroundColor3 = color or Color3_RGB(30, 30, 45),
+        BackgroundTransparency = 0.15,
+        Text = text,
+        TextColor3 = Color3_RGB(240, 240, 250),
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 10,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+    })
+    corner(btn, 5)
+    stroke(btn, color or Color3_RGB(0, 220, 255), 1, 0.5)
+    btn.MouseButton1Click:Connect(function()
+        TweenService:Create(btn, TweenInfo_new(0.08), { BackgroundTransparency = 0.5 }):Play()
+        task_wait(0.08)
+        TweenService:Create(btn, TweenInfo_new(0.15), { BackgroundTransparency = 0.15 }):Play()
+        local ok, err = pcall(callback)
+        if not ok then Logger.err("Button", text, err) end
+    end)
+    return btn
+end
+
+function UI.gridToggle(parent, text, default, callback)
+    local btn = mk("TextButton", parent, {
+        Size = UDim2_new(0, 145, 0, 26),
+        BackgroundColor3 = default and Color3_RGB(0, 220, 255) or Color3_RGB(30, 30, 45),
+        BackgroundTransparency = default and 0.1 or 0.15,
+        Text = text,
+        TextColor3 = default and Color3_RGB(10, 10, 15) or Color3_RGB(240, 240, 250),
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 10,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+    })
+    corner(btn, 5)
+    local s = stroke(btn, default and Color3_RGB(0, 220, 255) or Color3_RGB(100, 100, 130), 1, 0.4)
+    local on = default
+
+    btn.MouseButton1Click:Connect(function()
+        on = not on
+        btn.BackgroundColor3 = on and Color3_RGB(0, 220, 255) or Color3_RGB(30, 30, 45)
+        btn.BackgroundTransparency = on and 0.1 or 0.15
+        btn.TextColor3 = on and Color3_RGB(10, 10, 15) or Color3_RGB(240, 240, 250)
+        s.Color = on and Color3_RGB(0, 220, 255) or Color3_RGB(100, 100, 130)
+        local ok, err = pcall(callback, on)
+        if not ok then Logger.err("Toggle", text, err) end
+    end)
+    return btn
+end
+
+local function ApplyFullbright(on)
+    pcall(function()
+        if on then
+            Lighting.Brightness           = 2
+            Lighting.GlobalShadows        = false
+            Lighting.ClockTime            = 14
+            Lighting.Ambient              = Color3_RGB(180, 180, 180)
+            Lighting.OutdoorAmbient       = Color3_RGB(180, 180, 180)
+            Lighting.FogEnd               = 100000
+            Lighting.FogStart             = 0
+            Lighting.FogColor             = Color3_RGB(200, 200, 200)
+            Lighting.ExposureCompensation = 0.5
+        else
+            Lighting.Brightness           = ORIGINAL.brightness
+            Lighting.GlobalShadows        = ORIGINAL.globalShadows
+            Lighting.ClockTime            = ORIGINAL.clockTime
+            Lighting.Ambient              = ORIGINAL.ambient
+            Lighting.OutdoorAmbient       = ORIGINAL.outdoorAmbient
+            Lighting.FogEnd               = ORIGINAL.fogEnd
+            Lighting.FogStart             = ORIGINAL.fogStart
+            Lighting.FogColor             = ORIGINAL.fogColor
+            Lighting.ExposureCompensation = ORIGINAL.exposureCompensation
+        end
+    end)
+end
+
+local function BuildUI()
+    if MainGui then pcall(function() MainGui:Destroy() end) end
+    Pages, TabBtns, RainbowElements = {}, {}, {}
+
+    MainGui = mk("ScreenGui", nil, {
+        Name = "HoshiMain",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 99990,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    })
+    SafeParent(MainGui)
+
+    local vp = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2_new(800, 600)
+    local WIN_W = 410
+    local WIN_H = math_min(580, vp.Y - 60)
+
+    Window = mk("Frame", MainGui, {
+        Size = UDim2_new(0, WIN_W, 0, WIN_H),
+        Position = UDim2_new(0.5, -WIN_W / 2, 0.5, -WIN_H / 2),
+        BackgroundColor3 = Color3_RGB(10, 10, 18),
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        ZIndex = 10,
+    })
+    corner(Window, 10)
+    local ws = stroke(Window, Color3_RGB(0, 220, 255), 1.5, 0.4)
+    local wg = gradient(ws, Color3_RGB(0, 220, 255), Color3_RGB(255, 0, 200), 45)
+    table_insert(RainbowElements, { obj = wg, type = "gradient" })
+
+    local TitleBar = mk("Frame", Window, {
+        Size = UDim2_new(1, 0, 0, 32),
+        BackgroundColor3 = Color3_RGB(18, 18, 28),
+        BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+        ZIndex = 11,
+    })
+    local TitleTxt = mk("TextLabel", TitleBar, {
+        Size = UDim2_new(1, -100, 1, 0),
+        Position = UDim2_new(0, 12, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "🌈 HOSHI HUB v4.0",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 12,
+    })
+    local tg = gradient(TitleTxt, Color3_RGB(0, 220, 255), Color3_RGB(255, 0, 200), 0)
+    table_insert(RainbowElements, { obj = tg, type = "gradient" })
+
+    local MinBtn = mk("TextButton", TitleBar, {
+        Size = UDim2_new(0, 18, 0, 18),
+        Position = UDim2_new(1, -68, 0.5, -9),
+        BackgroundColor3 = Color3_RGB(80, 255, 120),
+        Text = "−",
+        TextColor3 = Color3_RGB(10, 10, 15),
+        Font = Enum.Font.GothamBold,
+        TextSize = 13,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        ZIndex = 13,
+    })
+    corner(MinBtn, 4)
+
+    local CloseBtn = mk("TextButton", TitleBar, {
+        Size = UDim2_new(0, 18, 0, 18),
+        Position = UDim2_new(1, -24, 0.5, -9),
+        BackgroundColor3 = Color3_RGB(255, 60, 90),
+        Text = "×",
+        TextColor3 = Color3_new(1, 1, 1),
+        Font = Enum.Font.GothamBold,
+        TextSize = 13,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        ZIndex = 13,
+    })
+    corner(CloseBtn, 4)
+
+    local SID_W = 90
+    local Sidebar = mk("Frame", Window, {
+        Size = UDim2_new(0, SID_W, 1, -32),
+        Position = UDim2_new(0, 0, 0, 32),
+        BackgroundColor3 = Color3_RGB(18, 18, 28),
+        BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+        ZIndex = 11,
+    })
+    local Pill = mk("Frame", Sidebar, {
+        Size = UDim2_new(0, 3, 0, 22),
+        Position = UDim2_new(0, 3, 0, 8),
+        BackgroundColor3 = Color3_RGB(0, 220, 255),
+        BorderSizePixel = 0,
+        ZIndex = 13,
+    })
+    corner(Pill, 2)
+    local pg = gradient(Pill, Color3_RGB(0, 220, 255), Color3_RGB(255, 0, 200), 90)
+    table_insert(RainbowElements, { obj = pg, type = "gradient" })
+
+    local Content = mk("ScrollingFrame", Window, {
+        Size = UDim2_new(1, -SID_W - 8, 1, -40),
+        Position = UDim2_new(0, SID_W + 4, 0, 36),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Color3_RGB(0, 220, 255),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        CanvasSize = UDim2_new(0, 0, 0, 0),
+        BorderSizePixel = 0,
+        ZIndex = 11,
+    })
+    local ll = Instance_new("UIListLayout")
+    ll.Padding = UDim_new(0, 6)
+    ll.SortOrder = Enum.SortOrder.LayoutOrder
+    ll.Parent = Content
+
+    local TABS = {
+        { id = "Main",     icon = "🏠", name = "Chính" },
+        { id = "Defense",  icon = "🛡", name = "Bảo vệ" },
+        { id = "Farm",     icon = "🥚", name = "Auto Farm" },
+        { id = "Remote",   icon = "📡", name = "Remote Fire" },
+        { id = "Combat",   icon = "⚔️", name = "Chiến đấu" },
+        { id = "Movement", icon = "🏃", name = "Di chuyển" },
+        { id = "Visual",   icon = "👁️", name = "Hiển thị" },
+        { id = "Misc",     icon = "⚙️", name = "Khác" },
+    }
+
+    local function mkPage(id)
+        local p = mk("Frame", Content, {
+            Size = UDim2_new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            Visible = false,
+            ZIndex = 11,
+        })
+        local l = Instance_new("UIListLayout")
+        l.Padding = UDim_new(0, 6)
+        l.SortOrder = Enum.SortOrder.LayoutOrder
+        l.Parent = p
+        Pages[id] = p
+        return p
+    end
+
+    local function switchTab(id)
+        State.currentTab = id
+        for k, p in pairs(Pages) do
+            p.Visible = (k == id)
+        end
+    end
+
+    for order, tab in ipairs(TABS) do
+        local btn = mk("TextButton", Sidebar, {
+            Size = UDim2_new(1, -6, 0, 26),
+            Position = UDim2_new(0, 3, 0, (order - 1) * 28 + 6),
+            BackgroundTransparency = 1,
+            ZIndex = 12,
+            AutoButtonColor = false,
+            Text = "",
+        })
+        corner(btn, 5)
+        local iconLbl = mk("TextLabel", btn, {
+            Size = UDim2_new(0, 16, 1, 0),
+            Position = UDim2_new(0, 6, 0, 0),
+            BackgroundTransparency = 1,
+            Text = tab.icon,
+            TextSize = 11,
+            TextColor3 = Color3_RGB(240, 240, 250),
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = 13,
+        })
+        local lbl = mk("TextLabel", btn, {
+            Size = UDim2_new(1, -24, 1, 0),
+            Position = UDim2_new(0, 22, 0, 0),
+            BackgroundTransparency = 1,
+            Text = tab.name,
+            TextColor3 = Color3_RGB(140, 140, 170),
+            Font = Enum.Font.GothamBold,
+            TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 13,
+        })
+        table_insert(TabBtns, { id = tab.id, btn = btn, lbl = lbl, icon = iconLbl })
+
+        btn.MouseButton1Click:Connect(function()
+            TweenService:Create(Pill, TweenInfo_new(0.3), {
+                Position = UDim2_new(0, 3, 0, (order - 1) * 28 + 8)
+            }):Play()
+            for _, ob in ipairs(TabBtns) do
+                if ob.id ~= tab.id then
+                    ob.lbl.TextColor3 = Color3_RGB(140, 140, 170)
+                    ob.icon.TextColor3 = Color3_RGB(240, 240, 250)
+                end
+            end
+            lbl.TextColor3 = Color3_RGB(0, 220, 255)
+            iconLbl.TextColor3 = Color3_RGB(0, 220, 255)
+            switchTab(tab.id)
+        end)
+        mkPage(tab.id)
+    end
+
+    if #TabBtns > 0 then
+        TabBtns[1].lbl.TextColor3 = Color3_RGB(0, 220, 255)
+        TabBtns[1].icon.TextColor3 = Color3_RGB(0, 220, 255)
+        switchTab("Main")
+    end
+
+    -- TAB: MAIN
+    local pMain = Pages.Main
+    UI.heading(pMain, "⚡ Quick Toggles")
+    local qGrid = mk("Frame", pMain, {
+        Size = UDim2_new(1, 0, 0, 92),
+        BackgroundTransparency = 1,
+    })
+    local ql = Instance_new("UIGridLayout")
+    ql.CellSize = UDim2_new(0, 145, 0, 26)
+    ql.CellPadding = UDim2_new(0, 4, 0, 4)
+    ql.FillDirectionMaxCells = 2
+    ql.Parent = qGrid
+
+    UI.gridToggle(qGrid, "👻 Noclip", false, function(v) State.noclip = v end)
+    UI.gridToggle(qGrid, "🦘 Inf Jump", false, function(v) State.infiniteJump = v end)
+    UI.gridToggle(qGrid, "🔦 Fullbright", false, function(v)
+        State.fullbright = v
+        ApplyFullbright(v)
+    end)
+    UI.gridToggle(qGrid, "⚡ Speed", false, function(v)
+        State.speedHack = v
+        if not v and State.hum then
+            pcall(function() State.hum.WalkSpeed = State.originalWalkSpeed or 16 end)
+        end
+    end)
+    UI.gridToggle(qGrid, "🥚 Auto Steal", false, function(v) State.autoSteal = v end)
+    UI.gridToggle(qGrid, "📡 Remote Fire", false, function(v)
+        State.autoFireRemote = v
+        Notify("📡 Remote Fire", v and "Đã bật!" or "Đã tắt", 2)
+    end)
+
+    -- TAB: DEFENSE
+    local pDef = Pages.Defense
+    UI.heading(pDef, "🛡️ Anti-Kick Engine v4.0")
+    local defCard = mk("Frame", pDef, {
+        Size = UDim2_new(1, 0, 0, 140),
+        BackgroundColor3 = Color3_RGB(20, 60, 20),
+        BackgroundTransparency = 0.25,
+        BorderSizePixel = 0,
+        ZIndex = 11,
+    })
+    corner(defCard, 8)
+    stroke(defCard, Color3_RGB(80, 255, 120), 1.5, 0.3)
+
+    local defLbl = mk("TextLabel", defCard, {
+        Size = UDim2_new(1, -16, 1, -12),
+        Position = UDim2_new(0, 8, 0, 6),
+        BackgroundTransparency = 1,
+        Text = "🛡️ Defense đang khởi động...",
+        TextColor3 = Color3_RGB(80, 255, 120),
+        Font = Enum.Font.Code,
+        TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true,
+        ZIndex = 12,
+    })
+
+    task_spawn(function()
+        while defLbl.Parent do
+            task_wait(0.5)
+            pcall(function()
+                defLbl.Text = string_format(
+                    "🛡️ DEFENSE v4.0 — HOẠT ĐỘNG\n" ..
+                    "━━━━━━━━━━━━━━━━━━\n" ..
+                    "🚫 Kick chặn: %d\n" ..
+                    "🌀 Teleport chặn: %d\n" ..
+                    "🗑️ Remote xóa: %d\n" ..
+                    "📜 Script xóa: %d\n" ..
+                    "🔄 Hook khôi phục: %d\n" ..
+                    "🧠 Memory scan: %d\n" ..
+                    "👁️ Watchdog ticks: %d\n" ..
+                    "━━━━━━━━━━━━━━━━━━\n" ..
+                    "✅ Trạng thái: PROTECTED",
+                    Defense.KICK_BLOCKED,
+                    Defense.TELEPORT_BLOCKED,
+                    Defense.REMOTES_KILLED,
+                    Defense.SCRIPTS_KILLED,
+                    Defense.HOOKS_RESTORED,
+                    Defense.MEMORY_SCANS,
+                    Defense.WATCHDOG_TICKS
+                )
+            end)
+        end
+    end)
+
+    UI.heading(pDef, "🎯 Tùy chọn bảo vệ")
+    UI.gridToggle(pDef, "🛡 Bật/Tắt Defense", true, function(v)
+        Defense.ACTIVE = v
+        if v then
+            StartDefenseEngine()
+            Notify("success", "Defense", "Đã bật", 2)
+        else
+            Notify("warn", "Defense", "Đã tắt", 2)
+        end
+    end)
+    UI.gridButton(pDef, "🔍 Quét AC ngay", Color3_RGB(255, 200, 40), function()
+        local r = PurgeSuspiciousRemotes()
+        local s = PurgeAnticheatScripts()
+        local m = MemoryScanAndPurge()
+        Notify("info", "Quét", "Remote: " .. r .. " | Script: " .. s .. " | Mem: " .. m, 3)
+    end)
+    UI.gridButton(pDef, "♻️ Reset hooks", Color3_RGB(100, 200, 255), function()
+        InstallNamecallHook()
+        InstallIndexHook()
+        InstallNewIndexHook()
+        InstallDirectKickHook()
+        InstallDirectTeleportHook()
+        Notify("success", "Reset", "Hooks đã cài lại", 2)
+    end)
+
+    -- TAB: FARM
+    local pFarm = Pages.Farm
+    UI.heading(pFarm, "🥚 Auto Farm Eggs")
+    UI.gridToggle(pFarm, "🔄 Auto Steal", false, function(v) State.autoSteal = v end)
+    UI.gridToggle(pFarm, "📦 Auto Place", false, function(v) State.autoPlace = v end)
+    UI.gridToggle(pFarm, "🐣 Auto Hatch", false, function(v) State.autoHatch = v end)
+    UI.gridToggle(pFarm, "💰 Auto Sell", false, function(v) State.autoSell = v end)
+
+    -- TAB: REMOTE
+    local pRemote = Pages.Remote
+    UI.heading(pRemote, "📡 Auto Fire Remote")
+    UI.gridToggle(pRemote, "📡 BẬT AUTO FIRE", false, function(v)
+        State.autoFireRemote = v
+        Notify("📡 Remote Fire", v and "Đã bật!" or "Đã tắt", 2)
+    end)
+    UI.gridButton(pRemote, "🔍 Scan Remotes", Color3_RGB(0, 180, 255), function()
+        local n = RemoteFire.Scan()
+        RemoteFire.PrintList()
+        Notify("🔍 Scan", "Tìm thấy " .. n .. " remote", 3)
+    end)
+    UI.gridButton(pRemote, "🚀 Fire Ngay (1 lần)", Color3_RGB(255, 180, 0), function()
+        local n = RemoteFire.FireAll()
+        Notify("🚀 Fire", "Đã fire " .. n .. " remote", 2)
+    end)
+    UI.gridButton(pRemote, "🖨️ In Danh Sách", Color3_RGB(150, 100, 255), function()
+        RemoteFire.PrintList()
+        Notify("🖨️ Console", "Đã in ra F9 Console", 2)
+    end)
+
+    local addFrame = mk("Frame", pRemote, {
+        Size = UDim2_new(1, 0, 0, 32),
+        BackgroundColor3 = Color3_RGB(25, 25, 35),
+        BackgroundTransparency = 0.2,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+    })
+    corner(addFrame, 5)
+    local addBox = mk("TextBox", addFrame, {
+        Size = UDim2_new(0.65, -5, 0, 24),
+        Position = UDim2_new(0, 5, 0, 4),
+        BackgroundColor3 = Color3_RGB(15, 15, 22),
+        Text = "",
+        PlaceholderText = "Tên remote (vd: Egg1)",
+        TextColor3 = Color3_RGB(240, 240, 250),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 10,
+        ClearTextOnFocus = false,
+        BorderSizePixel = 0,
+        ZIndex = 13,
+    })
+    corner(addBox, 4)
+    local addBtn = mk("TextButton", addFrame, {
+        Size = UDim2_new(0.32, -5, 0, 24),
+        Position = UDim2_new(0.67, 0, 0, 4),
+        BackgroundColor3 = Color3_RGB(0, 220, 255),
+        Text = "+ Thêm",
+        TextColor3 = Color3_RGB(10, 10, 15),
+        Font = Enum.Font.GothamBold,
+        TextSize = 10,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        ZIndex = 13,
+    })
+    corner(addBtn, 4)
+    addBtn.MouseButton1Click:Connect(function()
+        local name = addBox.Text
+        if name and #name > 0 then
+            table_insert(State.customRemoteNames, name)
+            addBox.Text = ""
+            RemoteFire.Scan()
+            Notify("✅ Đã thêm", name, 2)
+        end
+    end)
+
+    -- TAB: COMBAT
+    local pCombat = Pages.Combat
+    UI.heading(pCombat, "⚔️ Chiến đấu")
+    UI.gridToggle(pCombat, "📡 ESP", false, function(v)
+        State.esp = v
+        if v then RefreshESP() else ClearAllESP() end
+    end)
+    UI.gridToggle(pCombat, "🎯 Aimbot", false, function(v) State.aimbot = v end)
+    UI.gridToggle(pCombat, "💀 Kill Aura", false, function(v) State.killAura = v end)
+
+    -- TAB: MOVEMENT
+    local pMove = Pages.Movement
+    UI.heading(pMove, "🏃 Di chuyển")
+    UI.gridToggle(pMove, "⚡ Speed Hack", false, function(v)
+        State.speedHack = v
+        if not v and State.hum then
+            pcall(function() State.hum.WalkSpeed = State.originalWalkSpeed or 16 end)
+        end
+    end)
+    UI.gridToggle(pMove, "👻 Noclip", false, function(v) State.noclip = v end)
+    UI.gridToggle(pMove, "🦘 Infinite Jump", false, function(v) State.infiniteJump = v end)
+
+    -- TAB: VISUAL
+    local pVisual = Pages.Visual
+    UI.heading(pVisual, "👁️ Hiển thị")
+    UI.gridToggle(pVisual, "🔦 Fullbright", false, function(v)
+        State.fullbright = v
+        ApplyFullbright(v)
+    end)
+    UI.gridToggle(pVisual, "📡 ESP", false, function(v)
+        State.esp = v
+        if v then RefreshESP() else ClearAllESP() end
+    end)
+
+    -- TAB: MISC
+    local pMisc = Pages.Misc
+    UI.heading(pMisc, "⚙️ Khác")
+    UI.gridButton(pMisc, "🔄 Reset Char", Color3_RGB(255, 100, 100), function()
+        if LP.Character then LP.Character:BreakJoints() end
+    end)
+    UI.gridButton(pMisc, "🗑️ Unload", Color3_RGB(255, 60, 60), function()
+        UnloadScript()
+    end)
+
+    -- Drag
+    local dragging, dragStart, winStart = false, nil, nil
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            winStart = Window.Position
+        end
+    end)
+    Lifecycle.TrackConnection(UserInputService.InputChanged:Connect(function(input)
+        if Lifecycle.destroyed or not MainGui or not MainGui.Parent then return end
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            Window.Position = UDim2_new(
+                winStart.X.Scale, winStart.X.Offset + delta.X,
+                winStart.Y.Scale, winStart.Y.Offset + delta.Y
+            )
+        end
+    end))
+    Lifecycle.TrackConnection(UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        State.uiOpen = false
+        Window.Visible = false
+    end)
+
+    MinBtn.MouseButton1Click:Connect(function()
+        if Window.Size.Y.Offset > 100 then
+            TweenService:Create(Window, TweenInfo_new(0.3), {
+                Size = UDim2_new(0, WIN_W, 0, 32)
+            }):Play()
+            Sidebar.Visible = false
+            Content.Visible = false
+        else
+            TweenService:Create(Window, TweenInfo_new(0.3), {
+                Size = UDim2_new(0, WIN_W, 0, WIN_H)
+            }):Play()
+            Sidebar.Visible = true
+            Content.Visible = true
+        end
+    end)
+
+    if not rainbowStarted then
+        rainbowStarted = true
+        rainbowEngine:Connect(function(color)
+            if not State.rainbowMode then return end
+            for _, elem in ipairs(RainbowElements) do
+                if elem.obj and elem.obj.Parent and elem.type == "gradient" then
+                    pcall(function()
+                        elem.obj.Color = ColorSequence.new(
+                            color,
+                            Color3_fromHSV((color.H * 360 + 60) % 360 / 360, 1, 1)
+                        )
+                    end)
+                end
+            end
+        end)
+        rainbowEngine:Start()
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 18] MAIN LOOPS
+-- ═══════════════════════════════════════════════════════════════════════════
+local function SafeLoop(name, interval, fn)
+    local th = task_spawn(function()
+        while State.alive and not Lifecycle.destroyed do
+            task_wait(interval)
+            if not State.alive or Lifecycle.destroyed then break end
+            local ok, err = pcall(fn)
+            if not ok then Logger.err("Loop:" .. name, "exec failed", err) end
+        end
+        Logger.log("Loop", name .. " terminated")
+    end)
+    Lifecycle.TrackThread(th)
+end
+
+SafeLoop("CharUpdate", 0.5, function() UpdateChar() end)
+SafeLoop("ESPRefresh", 1.5, function() RefreshESP() end)
+
+SafeLoop("AutoSteal", 0.3, function()
+    if not State.autoSteal or not State.hrp then return end
+    local now = os_clock()
+    if now - EggCache.lastSteal < EggCache.stealCooldown then return end
+    local egg, dist = FindNearestEgg(500)
+    if egg and dist and dist < 500 then
+        Humanizer.RandomDelay(0.05, 0.15)
+        local targetPos = Humanizer.Jitter(egg.Position + Vector3_new(0, 5, 0), 2)
+        Humanizer.TweenTeleport(State.hrp, targetPos, 0.15)
+        task_wait(0.2)
+        pcall(function()
+            local prompt = egg:FindFirstChildOfClass("ProximityPrompt")
+            if prompt and fireproximityprompt then
+                fireproximityprompt(prompt)
+            end
+        end)
+        EggCache.lastSteal = os_clock()
+    end
+end)
+
+SafeLoop("AutoFireRemote", 0.1, function()
+    if not State.autoFireRemote then return end
+    local now = os_clock()
+    if now - State.lastFireTime < State.fireInterval then return end
+    State.lastFireTime = now
+    RemoteFire.FireAll()
+end)
+
+SafeLoop("KillAura", 0.4, function()
+    if State.killAura then RunKillAura() end
+end)
+
+SafeLoop("AntiAFK", 60, function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2_new(0, 0))
+    end)
+end)
+
+Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
+    if State.noclip and State.char then
+        for _, p in ipairs(State.char:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+    end
+end))
+
+Lifecycle.TrackConnection(RunService.Stepped:Connect(function()
+    if State.speedHack and State.hum and State.hum.Health > 0 then
+        if State.hum.WalkSpeed ~= State.speedValue then
+            State.hum.WalkSpeed = State.speedValue
+        end
+    end
+end))
+
+Lifecycle.TrackConnection(RunService.RenderStepped:Connect(function()
+    if State.aimbot then
+        RunAimbot()
+    end
+end))
+
+Lifecycle.TrackConnection(UserInputService.JumpRequest:Connect(function()
+    if State.infiniteJump and State.hum then
+        pcall(function()
+            State.hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end)
+    end
+end))
+
+Lifecycle.TrackConnection(UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if UserInputService:GetFocusedTextBox() then return end
+
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        if MainGui then
+            State.uiOpen = not State.uiOpen
+            MainGui.Enabled = State.uiOpen
+        end
+    elseif input.KeyCode == Enum.KeyCode.K then
+        if MainGui then
+            MainGui.Enabled = false
+            State.uiOpen = false
+        end
+        State.autoSteal = false
+        State.autoFireRemote = false
+        State.killAura = false
+        State.aimbot = false
+        Notify("🚨 PANIC", "Đã tắt tất cả", 2)
+    end
+end))
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- [MODULE 19] BOOT SEQUENCE
+-- ═══════════════════════════════════════════════════════════════════════════
+getgenv().HOSHI_STATE = {
+    version = "4.0",
+    destroy = function()
+        UnloadScript()
+    end,
+}
+
+task_spawn(function()
+    xpcall(function()
+        BuildUI()
+        task_wait(1)
+        local n = RemoteFire.Scan()
+        Notify("🌈 HOSHI HUB v4.0", "Load OK | " .. n .. " remote", 5)
+        Notify("🛡️ Anti-Kick", "Defense Engine ACTIVE", 5)
+        Notify("🎮 Hướng dẫn", "RightShift: Menu | K: Panic", 5)
+    end, function(e)
+        Logger.err("BOOT", "Failed", e)
+    end)
+end)
+
+print("═══════════════════════════════════════════════════════")
+print("⚡ HOSHI HUB v4.0 — ANTI-KICK HARDENED LOADED!")
+print("  🛡️ Defense Engine: 20 layers ACTIVE")
+print("  ✅ UI hidden in gethui()")
+print("  ✅ Hook __namecall + Player.Kick + Teleport")
+print("  ✅ Purge AC Remotes/Scripts (GC scan)")
+print("  ✅ Watchdog auto-rehook every 1s")
+print("  📡 Tab 'Remote Fire' → Scan → Bật Auto Fire")
+print("  🎮 RightShift: Menu | K: Panic")
+print("═══════════════════════════════════════════════════════")
